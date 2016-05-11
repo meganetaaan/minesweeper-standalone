@@ -1,0 +1,45 @@
+{
+  "name": "minesweeper-standalone",
+  "version": "0.0.1",
+  "description": "Yet another minesweeper game that can run locally.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "watch": "watchify -t babelify -t browserify-shim ./index.js -o 'exorcist ./dest/build.js.map > ./dest/build.js' -d",
+    "server": "live-server --port=8003",
+    "start": "npm run watch & npm run server"
+  },
+  "author": "Shinya Ishikawa",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/meganetaaan/minesweeper-standalone.git"
+  },
+  "dependencies": {
+    "jquery": "^2.2.1",
+    "material-design-lite": "^1.1.1",
+    "minesweeper-engine": "^0.1.0"
+  },
+  "devDependencies": {
+    "babel-preset-es2015": "^6.6.0",
+    "babelify": "^7.2.0",
+    "browserify": "^13.0.0",
+    "browserify-shim": "^3.8.12",
+    "exorcist": "^0.4.0",
+    "live-server": "^1.0.0",
+    "watchify": "^3.7.0"
+  },
+  "browser": {
+    "h5": "./lib/hifive/h5.dev.js"
+  },
+  "browserify-shim": {
+    "jquery": "$",
+    "h5": {
+      "depends": "jquery:jQuery"
+    }
+  },
+  "bugs": {
+    "url": "https://github.com/meganetaaan/minesweeper-standalone/issues"
+  },
+  "homepage": "https://github.com/meganetaaan/minesweeper-standalone#readme"
+}
