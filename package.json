@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "watch": "watchify -t babelify -t browserify-shim ./index.js -o 'exorcist ./dest/build.js.map > ./dest/build.js' -d",
+    "watch": "watchify -t reactify -t babelify -t browserify-shim ./index.jsx -o 'exorcist ./dest/build.js.map > ./dest/build.js' -d",
     "server": "live-server --port=8003",
     "start": "npm run watch & npm run server"
   },
@@ -18,7 +18,10 @@
   "dependencies": {
     "jquery": "^2.2.1",
     "material-design-lite": "^1.1.1",
-    "minesweeper-engine": "^0.1.0"
+    "minesweeper-engine": "^0.1.0",
+    "react": "^15.0.2",
+    "react-dom": "^15.0.2",
+    "reactify": "^1.1.1"
   },
   "devDependencies": {
     "babel-preset-es2015": "^6.6.0",
