@@ -3,13 +3,24 @@
 
 <head>
   <meta charset="UTF-8">
-  <title></title>
+  <title>MineSweeper</title>
   <script src="./dest/build.js"></script>
+  <style>
+    .field{
+      border-collapse: collapse;
+      text-align: center;
+    }
+    .cell{
+      height: 20px;
+      width: 20px;
+      border: 1px solid black;
+    } 
+  </style>
 </head>
 
 <body>
   <div id="mineSweeperContainer">
-    <div id="container"></div>
+    <div class="fieldContainer"></div>
   </div>
 </body>
 
