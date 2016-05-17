@@ -18,7 +18,7 @@
   "dependencies": {
     "jquery": "^2.2.1",
     "material-design-lite": "^1.1.1",
-    "minesweeper-engine": "^0.1.1",
+    "minesweeper-engine": "^0.2.0",
     "react": "^15.0.2",
     "react-dom": "^15.0.2"
   },
