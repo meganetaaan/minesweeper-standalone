@@ -10,6 +10,9 @@
     <title>MineSweeper</title>
     <script src="./dest/build.js"></script>
     <style>
+      .cell[data-mine-isopened="true"]{
+        background-color: #EEEEEE;
+      }
       .cell[data-mine-num="-1"]{
         color: #FAFAFA;
         background-color: #E64A19;
@@ -41,15 +44,19 @@
       body{
         margin: 0;
         padding: 0;
-        background-color: #EEEEEE;
+        background-color: #78909C;
+        user-select: none;
+        -moz-user-select: none;
+        -webkit-user-select: none;
+        -ms-user-select: none;
       }
       .fieldContainer{
         position: absolute;
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
-        width: 80%;
-        height: 80%;
+        width: 90%;
+        height: 90%;
         background-color: #FAFAFA;
         box-shadow: 0 0 2px rgba(0,0,0,.7),0 2px 4px rgba(0,0,0,.14);
       }
@@ -61,13 +68,13 @@
         border-collapse: collapse;
         text-align: center;
         font-family: "游ゴシック", YuGothic, "Hiragino Kaku Gothic ProN", "Hiragino Kaku Gothic Pro", "ＭＳ ゴシック", sans-serif;
-        font-size: 1.6em;
+        font-size: 1.2em;
         font-weight: bold;
         table-layout: fixed;
       }
       .cell{
         color: #757575;
-        border: 1px solid #EEEEEE;
+        border: 1px solid #E0E0E0;
       } 
     </style>
   </head>
