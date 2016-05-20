@@ -7,7 +7,7 @@ require('h5');
   const ReactDOM = require('react-dom');
 
   const Field = (props) => {
-    return <table className="field">
+    return <table className="field" data-mine-status={props.status}>
     <tbody>
     {props.field.map((row, idx) =>
                      <Row key={idx} cells={row} row={idx} flags={props.flagsField[idx]}/>
@@ -60,6 +60,23 @@ require('h5');
     __ready: function(){
       this.getNewField();
     },
+    _LEVELS: {
+      BEGINNER: {
+        rowNum: 9,
+        colNum: 9,
+        mineNum: 10
+      },
+      INTERMEDIATE: {
+        rowNum: 16,
+        colNum: 16,
+        mineNum: 40
+      },
+      EXPERT: {
+        rowNum: 30,
+        colNum: 16,
+        mineNum: 99
+      }
+    },
 
     _createFlags(){
       const flags = [];
@@ -85,7 +102,8 @@ require('h5');
     },
 
     getNewField: function(){
-      this._mine = new MineSweeper(16, 16, 40);
+      const level = this._LEVELS.INTERMEDIATE;
+      this._mine = new MineSweeper(level.rowNum, level.colNum, level.mineNum);
       this._flags = this._createFlags();
       return this.getField();
     },
@@ -119,11 +137,12 @@ require('h5');
   const mineSweeperController = {
     __name: 'minesweeper.mineSweeperController',
     _mineSweeperLogic: mineSweeperLogic,
-    _isCaboomed: false,
+    _isCaboom: false,
+    _isCleared: false,
 
     _render: function(data){
       ReactDOM.render(
-        <Field field={data.field} flagsField={data.flags}/>,
+        <Field status={data.status} field={data.field} flagsField={data.flags}/>,
           this.$find('.fieldContainer').get(0)
       );
     },
@@ -133,12 +152,13 @@ require('h5');
     },
 
     _reset: function(){
-      const field =       this._isCaboomed = false;
+      this._isCaboom = false;
+      this._isCleared = false;
       this._render(this._mineSweeperLogic.getNewField());
     },
 
     '.cell click': function(context, $el) {
-      if(this._isCaboomed){
+      if(this._isCaboom || this._isCleared){
         this._reset();
       } else if($el.attr('data-mine-flag') === 'true'){
         return;
@@ -146,9 +166,13 @@ require('h5');
         const row = Number($el.attr('data-mine-row'));
         const col = Number($el.attr('data-mine-col'));
         const result = this._mineSweeperLogic.open(row, col);
-        if(result.status === 'CABOOM'){
-          this._isCaboomed = true;
+
+        if(result.status === 'ERROR'){
+          this.log.error(result.message);
+          return;
         }
+        this._isCleared = result.status === 'CLEARED';
+        this._isCaboom = result.status === 'CABOOM';
         this._render(result);
       }
     },
@@ -156,7 +180,7 @@ require('h5');
     '.cell contextmenu': function(context, $el) {
       context.event.preventDefault();
       const isOpened = $el.attr('data-mine-isopened') === 'true';
-      if(isOpened || this._isCaboomed){
+      if(isOpened || this._isCaboom){
         return;
       } else { 
         const row = Number($el.attr('data-mine-row'));

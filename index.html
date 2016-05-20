@@ -10,6 +10,10 @@
     <title>MineSweeper</title>
     <script src="./dest/build.js"></script>
     <style>
+      .field[data-mine-status="CLEARED"] .cell[data-mine-isopened="false"]{
+        color: #FAFAFA;
+        background-color: #00E676;
+      }
       .cell[data-mine-isopened="true"]{
         background-color: #EEEEEE;
       }
@@ -56,9 +60,8 @@
         left: 50%;
         transform: translate(-50%, -50%);
         width: 90%;
-        height: 90%;
-        background-color: #FAFAFA;
-        box-shadow: 0 0 2px rgba(0,0,0,.7),0 2px 4px rgba(0,0,0,.14);
+        max-width: 90vh;
+        height: 90vh;
       }
       .field{
         position: absolute;
@@ -71,6 +74,8 @@
         font-size: 1.2em;
         font-weight: bold;
         table-layout: fixed;
+        background-color: #FAFAFA;
+        box-shadow: 0 0 2px rgba(0,0,0,.7),0 2px 4px rgba(0,0,0,.14);
       }
       .cell{
         color: #757575;

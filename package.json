@@ -6,7 +6,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "watch": "watchify -t [ babelify --presets [ es2015 react ]  ] -t browserify-shim ./index.jsx -o 'exorcist ./dest/build.js.map > ./dest/build.js' -d",
-    "server": "live-server --port=8003",
+    "server": "live-server --port=8003 --watch=index.html,dest/build.js",
     "start": "npm run watch & npm run server"
   },
   "author": "Shinya Ishikawa",
@@ -18,7 +18,7 @@
   "dependencies": {
     "jquery": "^2.2.1",
     "material-design-lite": "^1.1.1",
-    "minesweeper-engine": "^0.2.0",
+    "minesweeper-engine": "^0.3.3",
     "react": "^15.0.2",
     "react-dom": "^15.0.2"
   },

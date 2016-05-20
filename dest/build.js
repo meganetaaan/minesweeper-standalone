@@ -13,7 +13,7 @@ require('h5');
   var Field = function Field(props) {
     return React.createElement(
       'table',
-      { className: 'field' },
+      { className: 'field', 'data-mine-status': props.status },
       React.createElement(
         'tbody',
         null,
@@ -71,6 +71,23 @@ require('h5');
     __ready: function __ready() {
       this.getNewField();
     },
+    _LEVELS: {
+      BEGINNER: {
+        rowNum: 9,
+        colNum: 9,
+        mineNum: 10
+      },
+      INTERMEDIATE: {
+        rowNum: 16,
+        colNum: 16,
+        mineNum: 40
+      },
+      EXPERT: {
+        rowNum: 30,
+        colNum: 16,
+        mineNum: 99
+      }
+    },
 
     _createFlags: function _createFlags() {
       var flags = [];
@@ -95,7 +112,8 @@ require('h5');
 
 
     getNewField: function getNewField() {
-      this._mine = new MineSweeper(16, 16, 40);
+      var level = this._LEVELS.INTERMEDIATE;
+      this._mine = new MineSweeper(level.rowNum, level.colNum, level.mineNum);
       this._flags = this._createFlags();
       return this.getField();
     },
@@ -129,10 +147,11 @@ require('h5');
   var mineSweeperController = {
     __name: 'minesweeper.mineSweeperController',
     _mineSweeperLogic: mineSweeperLogic,
-    _isCaboomed: false,
+    _isCaboom: false,
+    _isCleared: false,
 
     _render: function _render(data) {
-      ReactDOM.render(React.createElement(Field, { field: data.field, flagsField: data.flags }), this.$find('.fieldContainer').get(0));
+      ReactDOM.render(React.createElement(Field, { status: data.status, field: data.field, flagsField: data.flags }), this.$find('.fieldContainer').get(0));
     },
 
     __ready: function __ready() {
@@ -140,12 +159,13 @@ require('h5');
     },
 
     _reset: function _reset() {
-      var field = this._isCaboomed = false;
+      this._isCaboom = false;
+      this._isCleared = false;
       this._render(this._mineSweeperLogic.getNewField());
     },
 
     '.cell click': function cellClick(context, $el) {
-      if (this._isCaboomed) {
+      if (this._isCaboom || this._isCleared) {
         this._reset();
       } else if ($el.attr('data-mine-flag') === 'true') {
         return;
@@ -153,9 +173,13 @@ require('h5');
         var row = Number($el.attr('data-mine-row'));
         var col = Number($el.attr('data-mine-col'));
         var result = this._mineSweeperLogic.open(row, col);
-        if (result.status === 'CABOOM') {
-          this._isCaboomed = true;
+
+        if (result.status === 'ERROR') {
+          this.log.error(result.message);
+          return;
         }
+        this._isCleared = result.status === 'CLEARED';
+        this._isCaboom = result.status === 'CABOOM';
         this._render(result);
       }
     },
@@ -163,7 +187,7 @@ require('h5');
     '.cell contextmenu': function cellContextmenu(context, $el) {
       context.event.preventDefault();
       var isOpened = $el.attr('data-mine-isopened') === 'true';
-      if (isOpened || this._isCaboomed) {
+      if (isOpened || this._isCaboom) {
         return;
       } else {
         var row = Number($el.attr('data-mine-row'));
@@ -363,7 +387,7 @@ var ret=$ret[0].childNodes;var fragment=context.createDocumentFragment();for(var
  * @param {String} str 文字列
  * @returns {String} エスケープ済文字列
  */function escapeRegex(str){return str.replace(/\W/g,'\\$&');} /**
- * 引数がStringの場合���RegExpオブジェクトにして返します。 引数がRegExpオブジェクトの場合はそのまま返します。
+ * 引数がStringの場合、RegExpオブジェクトにして返します。 引数がRegExpオブジェクトの場合はそのまま返します。
  *
  * @private
  * @param {String|RegExp} target 値
@@ -461,7 +485,7 @@ if(length===1||isPromise(promises)){var promise=length===1?promises[0]:promises;
 this._doneCallbackExecuter();return;} // プロミス配列を作っていない場合のremoveをここで定義(プロトタイプのremoveを上書き)
 this.remove=function(p){if(this._resolved||this._rejected){return;}if(promise===p){this._doneCallbackExecuter();}}; // 長さ1で、それがプロミスなら、そのプロミスにdoneとfailを引っかける
 promise.done(this._doneCallbackExecuter);promise.fail(this._failCallbackExecuter);return;} // promisesの中のプロミスオブジェクトの数(プロミスでないものは無視)
-// 引数に渡されたpromisesのうち、プロミスオブジェクトと判定したものを列挙
+// 引数に渡されたpromisesのうち、プロミスオブジェクトと判定���たものを列挙
 var monitoringPromises=[];for(var i=0,l=promises.length;i<l;i++){var p=promises[i];if(isPromise(p)){monitoringPromises.push(p);}}var promisesLength=monitoringPromises.length;if(promisesLength===0){ // プロミスが一つもなかった場合は即doneCallbackを実行
 this._resolved=true;doneCallback&&doneCallback();return;}this._promises=monitoringPromises;resolveArgs=[];this._resolveArgs=[];this._resolveCount=0;this._promisesLength=promisesLength; // いずれかのpromiseが成功するたびに全て終わったかチェックする関数
 function createCheckFunction(_promise){ // いずれかのpromiseが成功するたびに全て終わったかチェックする関数
@@ -567,7 +591,7 @@ addFwErrorCodeMap(errMsgMap); /* del end */ // =================================
 	 * @private
 	 * @returns {String} 型を表すコード（１字）
 	 */function typeToCode(typeStr){switch(typeStr){case 'string':return 's';case 'number':return 'n';case 'boolean':return 'b';case 'String':return 'S';case 'Number':return 'N';case 'Boolean':return 'B';case 'infinity':return 'i';case '-infinity':return 'I';case 'nan':return 'x';case 'date':return 'd';case 'regexp':return 'r';case 'array':return 'a';case 'object':return 'o';case 'null':return 'l';case TYPE_OF_UNDEFINED:return 'u';case 'undefElem':return '_';case 'objElem':return '@';}} /**
-	 * 文字列中の\(エスケー���文字)とその他特殊文字をエスケープ
+	 * 文字列中の\(エスケープ文字)とその他特殊文字をエスケープ
 	 * <p>
 	 * \\, \b, \f, \n, \r, \t をエスケープする
 	 * </p>
@@ -700,7 +724,7 @@ loadedScripts.splice(i,1,url);}};}h5.async.when(promises).done(doneCallback).fai
 var seq=thenCompat(getDeferred().resolve(),asyncFunc);$.each(resources,function(){var url=toAbsoluteUrl(this.toString());seq=thenCompat(seq,function(){var df=getDeferred();if(!force&&(url in addedJS||url in loadedUrl)){df.resolve();}else {getScriptString(url,async,cache).done(function(text,status,xhr){if(atomic){scriptData.push(text);loadedUrl[url]=url;}else {$.globalEval(text);addedJS[url]=url;}df.resolve();}).fail(function(){df.reject(this.url);});}return df.promise();},retDfFailCallback);});thenCompat(seq,function(){if(atomic){$.each(scriptData,function(i,e){$.globalEval(e);});$.extend(addedJS,loadedUrl);}retDf.resolve();},retDfFailCallback);}}return retDf.promise();}else {$.each(resources,function(){var url=toAbsoluteUrl(this.toString());if(!force&&(url in addedJS||url in loadedUrl)){return true;}getScriptString(url,async,cache).done(function(text,status,xhr){if(atomic){scriptData.push(text);loadedUrl[url]=url;}else {$.globalEval(text);addedJS[url]=url;}}).fail(function(){throwFwError(ERR_CODE_SCRIPT_FILE_LOAD_FAILD,[url]);});});if(atomic){ // 読み込みに成功した全てのスクリプトを評価する
 $.each(scriptData,function(i,e){$.globalEval(e);});$.extend(addedJS,loadedUrl);} // 同期ロードの場合は何もreturnしない
 }} /**
-	 * 文字列のプレフィックスが指定したものかどうかを返します。
+	 * 文字列のプレフィックスが指定したものかどう���を返します。
 	 *
 	 * @param {String} str 文字列
 	 * @param {String} prefix プレフィックス
@@ -713,7 +737,7 @@ $.each(scriptData,function(i,e){$.globalEval(e);});$.extend(addedJS,loadedUrl);}
 	 *
 	 * @param {String} str 文字列
 	 * @param {String} suffix サフィックス
-	 * @returns {Boolean} 文字列のサフィックスが指定したものかど���か
+	 * @returns {Boolean} 文字列のサフィックスが指定したものかどうか
 	 * @name endsWith
 	 * @function
 	 * @memberOf h5.u.str
@@ -936,11 +960,11 @@ var val=func(obj[key]);ret[unescape(key)]=val;}break;case 'date':ret=new Date(pa
 	 * @name getByPath
 	 * @function
 	 * @memberOf h5.u.obj
-	 */function getByPath(namespace,rootObj){if(!isString(namespace)){throwFwError(ERR_CODE_NAMESPACE_INVALID,'h5.u.obj.getByPath()');} // 'ary[0]'のような配列のindex参照の記法に対応するため、'.'記法に変換する
+	 */function getByPath(namespace,rootObj){if(!isString(namespace)){throwFwError(ERR_CODE_NAMESPACE_INVALID,'h5.u.obj.getByPath()');} // 'ary[0]'のような配列のindex参照の記法���対応するため、'.'記法に変換する
 namespace=namespace.replace(/\[(\d+)\]/g,function(m,c,index){if(index){ // 先頭以外の場合は'[]'を外して'.'を付けて返す
 return '.'+c;} // 先頭の場合は'[]'を外すだけ
 return c;});var names=namespace.split('.');var idx=0;if(names[0]==='window'&&(!rootObj||rootObj===window)){ // rootObjが未指定またはwindowオブジェクトの場合、namespaceの最初のwindow.は無視する
-idx=1;}var ret=rootObj||window;for(var len=names.length;idx<len;idx++){ret=ret[names[idx]];if(ret==null){ // nullまたはundefinedだっ���ら辿らない
+idx=1;}var ret=rootObj||window;for(var len=names.length;idx<len;idx++){ret=ret[names[idx]];if(ret==null){ // nullまたはundefinedだったら辿らない
 break;}}return ret;} /**
 	 * インターセプタを作成します。
 	 *
@@ -1085,7 +1109,7 @@ if(!event.isImmediatePropagationStopped){var _isImmediatePropagationStopped=fals
 	 * @private
 	 * @param moduleObject mixinする元となるモジュールオブジェクト
 	 */function Mixin(moduleObject){ // moduleObjectのプロパティキャッシュを作成
-var props={};for(var p in moduleObject){var v=moduleObject[p]; // hasOwnPropertyがtrueでなければコピ���しない
+var props={};for(var p in moduleObject){var v=moduleObject[p]; // hasOwnPropertyがtrueでなければコピーしない
 // 関数、null、文字列リテラル、数値リテラル、真偽値リテラルのいずれかの場合のみコピー
 if(moduleObject.hasOwnProperty(p)&&(isFunction(v)||v===null||typeof v==='string'||typeof v==='number'||typeof v==='boolean')){props[p]=v;}} // mix, hasInterfaceはMixinのprototypeに持たせていて、それぞれインスタンスが持つ_mix, _hasInterfaceを呼んでいる
 // _mix, _hasInterfaceはmoduleObjectのプロパティキャッシュを参照したいため、Mixinインスタンスごとに定義している
@@ -1195,7 +1219,7 @@ return;}if(!this._eventListeners){this._eventListeners={};}if(!this._eventListen
 		 * イベントをディスパッチします
 		 * <p>
 		 * イベントオブジェクトを引数に取り、そのevent.typeに登録されているイベントリスナを実行します。
-		 * イベントオブジェクトにpreventDefault()関数を追加してイベントリスナの引数に渡して呼び出します。
+		 * イベントオブジェクトにpreventDefault()関���を追加してイベントリスナの引数に渡して呼び出します。
 		 * </p>
 		 * <p>
 		 * 戻り値は『イベントリスナ内でpreventDefault()が呼ばれたかどうか』を返します。
@@ -1353,7 +1377,7 @@ var compiledLogSettings=null; // =============================
 	 *
 	 * <pre><code>
 	 * {
-	 * 	 all: maxStackSize maxStackSize���でのトレース結果を改行で結合した文字列
+	 * 	 all: maxStackSize maxStackSizeまでのトレース結果を改行で結合した文字列
 	 * 	 preview: 最大でPREVIEW_TRACE_COUNTまでのトレース結果を&quot; &lt;- &quot;で結合した文字列 &quot;[func1_2 () &lt;- func1_1 () &lt;- func1 () ...]&quot;
 	 * }
 	 * </code></pre>
@@ -1706,7 +1730,7 @@ var type=this.type;if(type==='POST'||!(stat===0||stat===ERROR_INTERNET_CANNOT_CO
 		 * var promise3 = dfd3.promise();
 		 * promise3.fail(function() {});
 		 * dfd3.reject(3);
-		 * // promiseオブジェクトからfailコールバックを登録���た場合も、commonFailHandlerは実行されない
+		 * // promiseオブジェクトからfailコールバックを登録した場合も、commonFailHandlerは実行されない
 		 *
 		 * h5.ajax('hoge');
 		 * // 'hoge'へのアクセスがエラーになる場合、commonFailHandlerが実行される。
@@ -1868,7 +1892,7 @@ var type=this.type;if(type==='POST'||!(stat===0||stat===ERROR_INTERNET_CANNOT_CO
 		 * <dd>メインシーンコンテナでブラウザタイトルの追従を行うか(デフォルトtrue)</dd>
 		 * <dt>clientQueryStringPrefix</dt>
 		 * <dd>type:string</dd>
-		 * <dd>シーン遷移パラメーター識別用プレフィクス。デフ���ルト空文字</dd>
+		 * <dd>シーン遷移パラメーター識別用プレフィクス。デフォルト空文字</dd>
 		 * <dt>clientFWQueryStringPrefix</dt>
 		 * <dd>type:string</dd>
 		 * <dd>シーン遷移パラメーター識別用プレフィクス(FW用)。デフォルト"_h5_"</dd>
@@ -2018,7 +2042,7 @@ function check(ua){ /**
 		 * @type Boolean
 		 * @memberOf h5.env.ua
 		 */var isChrome=!isEdge&&!!ua.match(/Chrome/i)||!!ua.match(/CrMo/)||!!ua.match(/CriOS/); /**
-		 * ブラウザがSafariであるかどうかを表します。 iOSのSafari���場合もtrueです。
+		 * ブラウザがSafariであるかどうかを表します。 iOSのSafariの場合もtrueです。
 		 *
 		 * @name isSafari
 		 * @type Boolean
@@ -2247,7 +2271,7 @@ var failArgs=argsToArray(arguments);if(method==='then'||method==='pipe'){ // the
 failArgs=failArgs[1];}if(hasValidCallback(failArgs)){existFailHandler=true;}} // オリジナルのコールバック登録メソッドを呼ぶ
 return promise._h5UnwrappedCall.call(this,method,argsToArray(arguments));};}(method);hookMethods[method]=promise[method];} // failコールバックを登録する可能性のある関数を上書き
 for(var i=0,l=CFH_HOOK_METHODS.length;i<l;i++){var prop=CFH_HOOK_METHODS[i];if(promise[prop]){ // cfhの管理をするための関数でオーバーライド
-override(prop);}} // pipeは戻り値が呼び���したpromise(またはdeferred)と違うので、
+override(prop);}} // pipeは戻り値が呼び出したpromise(またはdeferred)と違うので、
 // そのdeferred/promiseが持つメソッドの上書きをして返す関数にする。
 // jQuery1.6以下にない第3引数でのprogressコールバックの登録にも対応する。
 // rootDfdがあればrootDfd.pipeを持たせてあるので何もしない。
@@ -2326,7 +2350,7 @@ return toCFHAware(originalPromise.apply(this,arguments),promise);};}}return prom
 	 * @memberOf h5.async
 	 */var loop=function loop(array,callback,suspendOnTimes){if(!isArray(array)){throwFwError(ERR_CODE_NOT_ARRAY);}var dfd=deferred(); // 何回ごとにループを抜けるか。デフォルトは20回
 var st=$.type(suspendOnTimes)==='number'?suspendOnTimes:20;var index=0;var len=array.length;var execute,loopControl=null;var each=function each(){if(index===len){dfd.resolve(array);return;}var ret=callback.call(array,index,array[index],loopControl);index++;if(isPromise(ret)){ret.done(function(){execute();}).fail(function(){dfd.reject(array);});}else {execute();}};var async_=function async_(){setTimeout(function(){var i=index-1;if(index>0){dfd.notify({data:array,index:i,value:array[i]});}each();},0);};var _pause=false;execute=function execute(){if(_pause){return;}index%st===0?async_():each();};var stopFlag=false;loopControl={resume:function resume(){if(!stopFlag&&_pause){_pause=false;execute();}},pause:function pause(){_pause=true;},stop:function stop(){stopFlag=true;dfd.resolve(array);}};async_();return dfd.promise();}; /**
-	 * 引数に指定した１つ以上のPromiseオブジェクトに基づいて、コールバックメ���ッドを実行します。
+	 * 引数に指定した１つ以上のPromiseオブジェクトに基づいて、コールバックメソッドを実行します。
 	 * <p>
 	 * 引数に指定されたPromiseオブジェクトの挙動によって、以下のような処理を実行します。<br>
 	 * <ul>
@@ -2561,7 +2585,7 @@ copyJqXHRProperties(jqXHRWrapper,_jqXHR);dfd.resolveWith(this,arguments);} /**
 // またはこれが最後のリトライ、
 // またはリトライ指定のない場合、
 // rejectして終了
-// jqXHRのプロパティの値をラッパーにコピー
+// jqXHRの���ロパティの値をラッパーにコピー
 // ラッパーは最終的なjqXHRの値を持てばいいので、rejectを呼ぶ直前で新しいjqXHRの値に変更する
 copyJqXHRProperties(jqXHRWrapper,_jqXHR);dfd.rejectWith(this,arguments);return;}settings.retryCount--;if(this.async){ // 非同期ならretryIntervalミリ秒待機してリトライ
 var that=this;setTimeout(function(){$.ajax(that).done(retryDone).fail(retryFail);},settings.retryInterval);}else { // 同期なら即リトライする
@@ -2760,7 +2784,7 @@ dfd.resolve({url:resource.url,path:resource.path,templates:textResources});}).fa
 // テンプレートのロードが投げるエラー(Viewのエラー)にする
 // インスタンスは変更しないようにする
 var detail=errorObj.detail;var viewErrorObj=createRejectReason(ERR_CODE_TEMPLATE_AJAX,[detail.error.status,detail.url],detail);errorObj.code=viewErrorObj.code;errorObj.message=viewErrorObj.message;errorObj.detail=errorObj.detail;dfd.reject(errorObj);});return dfd.promise();} /**
-	 * jsファイルのデフ���ルトのリゾルバを作成する
+	 * jsファイルのデフォルトのリゾルバを作成する
 	 *
 	 * @private
 	 * @param {String} resourceKey
@@ -2845,14 +2869,14 @@ addResolver('namespace',null,resolveNamespace);addResolver('ejsfile',/.*\.ejs(\?
 	 */var SELECTOR_TYPE_CONST={SELECTOR_TYPE_LOCAL:1,SELECTOR_TYPE_GLOBAL:2,SELECTOR_TYPE_OBJECT:3};var SUFFIX_CONTROLLER='Controller';var SUFFIX_LOGIC='Logic';var EVENT_NAME_H5_TRACKSTART='h5trackstart';var EVENT_NAME_H5_TRACKMOVE='h5trackmove';var EVENT_NAME_H5_TRACKEND='h5trackend';var ROOT_ELEMENT_NAME='rootElement';var EVENT_NAME_TRIGGER_INDICATOR='triggerIndicator'; /** グローバルセレクタ指定かどうかの判定に使用する正規表現 */var GLOBAL_SELECTOR_REGEXP=/^\{.*\}$/; /** イベント名がバインドリクエスト指定かどうかの判定に使用する正規表現 */var BIND_REQUESTED_REGEXP=/^\[.*\]$/; /** インラインコメントテンプレートのコメントノードの開始文字列 */var COMMENT_BINDING_TARGET_MARKER='{h5view '; // エラーコード
 /** エラーコード: テンプレートに渡すセレクタが不正（コントローラビューでテンプレートに渡せるセレクタはコントローラのイベントハンドラ記述と同じになりました(#349） */ //var ERR_CODE_INVALID_TEMPLATE_SELECTOR = 6000;
 /** エラーコード: バインド対象が指定されていない */var ERR_CODE_BIND_TARGET_REQUIRED=6001; /** エラーコード: bindControllerメソッドにコントローラではないオブジェクトが渡された（このエラーはver.1.1.3時点では通常発生しないので削除） */ //var ERR_CODE_BIND_NOT_CONTROLLER = 6002;
-/** エラーコード: バインド対象となるDOMがない */var ERR_CODE_BIND_NO_TARGET=6003; /** エラーコード: バインド対象となるDOMが複数存在する */var ERR_CODE_BIND_TOO_MANY_TARGET=6004; /** エラーコード: 指定された引数の数が少ない */var ERR_CODE_TOO_FEW_ARGUMENTS=6005; /** エラーコード: コントローラの名前が指定されていない */var ERR_CODE_INVALID_CONTROLLER_NAME=6006; /** エラーコード: コントローラの初期化パラメータが不正 */var ERR_CODE_CONTROLLER_INVALID_INIT_PARAM=6007; /** エラーコード: 既にコントローラ化されている */var ERR_CODE_CONTROLLER_ALREADY_CREATED=6008; /** エラーコード: コントローラの参照が循環している */var ERR_CODE_CONTROLLER_CIRCULAR_REF=6009; /** エラーコード: ロジックの参照が循環している */var ERR_CODE_LOGIC_CIRCULAR_REF=6010; /** エラーコード: コントローラ化によって追加されるプロパティと名前が重複している */var ERR_CODE_CONTROLLER_SAME_PROPERTY=6011; /** エラーコード: イベントハンドラのセレクタに{this}が指定されている */var ERR_CODE_EVENT_HANDLER_SELECTOR_THIS=6012; /** エラーコード: あるセレクタに対して重複したイベントハンドラが設定されている */var ERR_CODE_SAME_EVENT_HANDLER=6013; /** エラーコード: ロジックの名前に文字列が指定されていない */var ERR_CODE_INVALID_LOGIC_NAME=6017; /** エラーコード: 既にロジック化されている */var ERR_CODE_LOGIC_ALREADY_CREATED=6018; /** エラーコード: exposeする際にコントローラ、もしくはロジックの名前がない */var ERR_CODE_EXPOSE_NAME_REQUIRED=6019; /** エラーコード: Viewモジュールが組み込まれていない */var ERR_CODE_NOT_VIEW=6029; /** エラーコード：バインド対象を指定する引数に文字列、オブジェクト、配列以外が渡された */var ERR_CODE_BIND_TARGET_ILLEGAL=6030; /** エラーコード：ルートコントローラ以外ではcontroller.bind()/unbind()/dispose()はできない */var ERR_CODE_BIND_UNBIND_DISPOSE_ROOT_ONLY=6031; /** エラーコード：コントローラメソッドは最低2つの引数が必要 */var ERR_CODE_CONTROLLER_TOO_FEW_ARGS=6032; /** エラーコード：コントローラの初期化処理がユーザーコードによって中断された(__initや__readyで返したプロミスがrejectした) */var ERR_CODE_CONTROLLER_INIT_REJECTED_BY_USER=6033; /** エラーコード：コントローラのバインド対象がノードではない */var ERR_CODE_BIND_NOT_NODE=6034; /** エラーコード：ルートエレメント未設定もしくはunbindされたコントローラで使用できないメソッドが呼ばれた */var ERR_CODE_METHOD_OF_NO_ROOTELEMENT_CONTROLLER=6035; /** エラーコード：disposeされたコントローラで使用できないメソッドが呼ばれた */var ERR_CODE_METHOD_OF_DISPOSED_CONTROLLER=6036; /** エラーコード：unbindは__constructでは呼べない */var ERR_CODE_CONSTRUCT_CANNOT_CALL_UNBIND=6037; /** エラーコード：コントローラの終了処理がユーザーコードによって中断された(__disposeで返したプロミスがrejectした) */var ERR_CODE_CONTROLLER_DISPOSE_REJECTED_BY_USER=6038; /** エラーコード：manageChildの引数にコントローラインスタンス以外が渡された */var ERR_CODE_CONTROLLER_MANAGE_CHILD_NOT_CONTROLLER=6039; /** エラーコード：unbindされたコントローラをmanageChildしようとした */var ERR_CODE_CONTROLLER_MANAGE_CHILD_UNBINDED_CONTROLLER=6040; /** エラーコード：unbindされたコントローラのmanageChildが呼ばれた */var ERR_CODE_CONTROLLER_MANAGE_CHILD_BY_UNBINDED_CONTROLLER=6041; /** エラーコード：manageChildの引数のコントローラインスタンスがルートコントローラじゃない */var ERR_CODE_CONTROLLER_MANAGE_CHILD_NOT_ROOT_CONTROLLER=6042; /** エラーコード：unbindされたコントローラのunmanageChildが呼ばれた */var ERR_CODE_CONTROLLER_UNMANAGE_CHILD_BY_UNBINDED_CONTROLLER=6043; /** エラーコード：unmanageChildの引数のコントローラインスタンスが自分の子コントローラじゃない */var ERR_CODE_CONTROLLER_UNMANAGE_CHILD_NOT_CHILD_CONTROLLER=6044; /** エラーコード：unmanageChildの第1引数がルートエレメント未決定コントローラで、第2引数がfalse */var ERR_CODE_CONTROLLER_UNMANAGE_CHILD_NO_ROOT_ELEMENT=6045; /** エラーコード: コントローラのデフォルトパラメータが不正 */var ERR_CODE_CONTROLLER_INVALID_INIT_DEFAULT_PARAM=6046; // =============================
+/** エラーコード: バインド対象となるDOMがない */var ERR_CODE_BIND_NO_TARGET=6003; /** エラーコード: バインド対象となるDOMが複数存在する */var ERR_CODE_BIND_TOO_MANY_TARGET=6004; /** エラーコード: 指定された引数の数が少ない */var ERR_CODE_TOO_FEW_ARGUMENTS=6005; /** エラーコード: コントローラの名前が指定されていない */var ERR_CODE_INVALID_CONTROLLER_NAME=6006; /** エラーコード: コントローラの初期化パラメータが不正 */var ERR_CODE_CONTROLLER_INVALID_INIT_PARAM=6007; /** エラーコード: 既にコントローラ化されている */var ERR_CODE_CONTROLLER_ALREADY_CREATED=6008; /** エラーコード: コントローラの参照が循環している */var ERR_CODE_CONTROLLER_CIRCULAR_REF=6009; /** エラーコード: ロジックの参照が循環している */var ERR_CODE_LOGIC_CIRCULAR_REF=6010; /** エラーコード: コントローラ化によって追加されるプロパティと名前が重複している */var ERR_CODE_CONTROLLER_SAME_PROPERTY=6011; /** エラーコード: イベントハンドラのセレクタに{this}が指���されている */var ERR_CODE_EVENT_HANDLER_SELECTOR_THIS=6012; /** エラーコード: あるセレクタに対して重複したイベントハンドラが設定されている */var ERR_CODE_SAME_EVENT_HANDLER=6013; /** エラーコード: ロジックの名前に文字列が指定されていない */var ERR_CODE_INVALID_LOGIC_NAME=6017; /** エラーコード: 既にロジック化されている */var ERR_CODE_LOGIC_ALREADY_CREATED=6018; /** エラーコード: exposeする際にコントローラ、もしくはロジックの名前がない */var ERR_CODE_EXPOSE_NAME_REQUIRED=6019; /** エラーコード: Viewモジュールが組み込まれていない */var ERR_CODE_NOT_VIEW=6029; /** エラーコード：バインド対象を指定する引数に文字列、オブジェクト、配列以外が渡された */var ERR_CODE_BIND_TARGET_ILLEGAL=6030; /** エラーコード：ルートコントローラ以外ではcontroller.bind()/unbind()/dispose()はできない */var ERR_CODE_BIND_UNBIND_DISPOSE_ROOT_ONLY=6031; /** エラーコード：コントローラメソッドは最低2つの引数が必要 */var ERR_CODE_CONTROLLER_TOO_FEW_ARGS=6032; /** エラーコード：コントローラの初期化処理がユーザーコードによって中断された(__initや__readyで返したプロミスがrejectした) */var ERR_CODE_CONTROLLER_INIT_REJECTED_BY_USER=6033; /** エラーコード：コントローラのバインド対象がノードではない */var ERR_CODE_BIND_NOT_NODE=6034; /** エラーコード：ルートエレメント未設定もしくはunbindされたコントローラで使用できないメソッドが呼ばれた */var ERR_CODE_METHOD_OF_NO_ROOTELEMENT_CONTROLLER=6035; /** エラーコード：disposeされたコントローラで使用できないメソッドが呼ばれた */var ERR_CODE_METHOD_OF_DISPOSED_CONTROLLER=6036; /** エラーコード：unbindは__constructでは呼べない */var ERR_CODE_CONSTRUCT_CANNOT_CALL_UNBIND=6037; /** エラーコード：コントローラの終了処理がユーザーコードによって中断された(__disposeで返したプロミスがrejectした) */var ERR_CODE_CONTROLLER_DISPOSE_REJECTED_BY_USER=6038; /** エラーコード：manageChildの引数にコントローラインスタンス以外が渡された */var ERR_CODE_CONTROLLER_MANAGE_CHILD_NOT_CONTROLLER=6039; /** エラーコード：unbindされたコントローラをmanageChildしようとした */var ERR_CODE_CONTROLLER_MANAGE_CHILD_UNBINDED_CONTROLLER=6040; /** エラーコード：unbindされたコントローラのmanageChildが呼ばれた */var ERR_CODE_CONTROLLER_MANAGE_CHILD_BY_UNBINDED_CONTROLLER=6041; /** エラーコード：manageChildの引数のコントローラインスタンスがルートコントローラじゃない */var ERR_CODE_CONTROLLER_MANAGE_CHILD_NOT_ROOT_CONTROLLER=6042; /** エラーコード：unbindされたコントローラのunmanageChildが呼ばれた */var ERR_CODE_CONTROLLER_UNMANAGE_CHILD_BY_UNBINDED_CONTROLLER=6043; /** エラーコード：unmanageChildの引数のコントローラインスタンスが自分の子コントローラじゃない */var ERR_CODE_CONTROLLER_UNMANAGE_CHILD_NOT_CHILD_CONTROLLER=6044; /** エラーコード：unmanageChildの第1引数がルートエレメント未決定コントローラで、第2引数がfalse */var ERR_CODE_CONTROLLER_UNMANAGE_CHILD_NO_ROOT_ELEMENT=6045; /** エラーコード: コントローラのデフォルトパラメータが不正 */var ERR_CODE_CONTROLLER_INVALID_INIT_DEFAULT_PARAM=6046; // =============================
 // Development Only
 // =============================
 var fwLogger=h5.log.createLogger('h5.core'); /* del begin */ // ログメッセージ
 var FW_LOG_TEMPLATE_LOADED='コントローラ"{0}"のテンプレートの読み込みに成功しました。';var FW_LOG_TEMPLATE_LOAD_FAILED='コントローラ"{0}"のテンプレートの読み込みに失敗しました。URL：{1}';var FW_LOG_INIT_CONTROLLER_REJECTED='コントローラ"{0}"の{1}で返されたPromiseがfailしたため、コントローラの初期化を中断しdisposeしました。';var FW_LOG_INIT_CONTROLLER_ERROR='コントローラ"{0}"の初期化中にエラーが発生しました。{0}はdisposeされました。';var FW_LOG_INIT_CONTROLLER_BEGIN='コントローラ"{0}"の初期化を開始しました。';var FW_LOG_INIT_CONTROLLER_COMPLETE='コントローラ"{0}"の初期化が正常に完了しました。';var FW_LOG_INIT_CONTROLLER_THROWN_ERROR='コントローラ"{0}"の{1}内でエラーが発生したため、コントローラの初期化を中断しdisposeしました。';var FW_LOG_BIND_TARGET_NOT_FOUND='イベントのバインド対象が見つかりません。指定されたグローバルセレクタ：{0}';var FW_LOG_BIND_TARGET_INVALID='イベントハンドラのセットに失敗しました。指定されたオブジェクトがaddEventListenerメソッドを持っていません。対象のオブジェクト：{0}'; // エラーコードマップ
 var errMsgMap={}; //errMsgMap[ERR_CODE_INVALID_TEMPLATE_SELECTOR] = 'update/append/prepend() の第1引数に"window", "navigator", または"window.", "navigator."で始まるセレクタは指定できません。';
 errMsgMap[ERR_CODE_BIND_TARGET_REQUIRED]='コントローラ"{0}"のバインド対象となる要素を指定して下さい。'; //errMsgMap[ERR_CODE_BIND_NOT_CONTROLLER] = 'コントローラ化したオブジェクトを指定して下さい。';
-errMsgMap[ERR_CODE_BIND_NO_TARGET]='コントローラ"{0}"のバインド対象となる要素が存在しません。';errMsgMap[ERR_CODE_BIND_TOO_MANY_TARGET]='コントローラ"{0}"のバインド対象となる要素が2つ以上存在します。バインド対象は1つのみにしてください。';errMsgMap[ERR_CODE_TOO_FEW_ARGUMENTS]='正しい数の引数を指定して下さい。';errMsgMap[ERR_CODE_INVALID_CONTROLLER_NAME]='コントローラの名前は必須です。コントローラの__nameにコントローラ名を空でない文字列で設定して下さい。';errMsgMap[ERR_CODE_CONTROLLER_INVALID_INIT_PARAM]='コントローラ"{0}"の初期化パラメータがプレーンオブジェクトではありません。初期化パラメータにはプレーンオブジェクトを設定してください。';errMsgMap[ERR_CODE_CONTROLLER_ALREADY_CREATED]='指定されたオブジェクトは既にコントローラ化されています。';errMsgMap[ERR_CODE_CONTROLLER_CIRCULAR_REF]='コントローラ"{0}"で、参照が循環しているため、コントローラを生成できません。';errMsgMap[ERR_CODE_LOGIC_CIRCULAR_REF]='ロジック"{0}"で、参照が循環しているため、ロジックを生成できません。';errMsgMap[ERR_CODE_CONTROLLER_SAME_PROPERTY]='コントローラ"{0}"のプロパティ"{1}"はコントローラ化によって追加されるプロパティと名前が重複しています。';errMsgMap[ERR_CODE_EVENT_HANDLER_SELECTOR_THIS]='コントローラ"{0}"でセレクタ名にthisが指定されています。コントローラをバインドした要素自身を指定したい時はrootElementを指定してください。';errMsgMap[ERR_CODE_SAME_EVENT_HANDLER]='コントローラ"{0}"のセレクタ"{1}"に対して"{2}"というイベントハンドラが重複して設定されています。';errMsgMap[ERR_CODE_INVALID_LOGIC_NAME]='ロジック名は必須です。ロジックの__nameにロジック名を空でない文字列で設定して下さい。';errMsgMap[ERR_CODE_LOGIC_ALREADY_CREATED]='指定されたオブジェクトは既にロジック化されています。';errMsgMap[ERR_CODE_EXPOSE_NAME_REQUIRED]='コントローラ、もしくはロジックの __name が設定されていません。';errMsgMap[ERR_CODE_NOT_VIEW]='テンプレートはViewモジュールがなければ使用できません。';errMsgMap[ERR_CODE_BIND_TARGET_ILLEGAL]='コントローラ"{0}"のバインド対象には、セレクタ文字列、または、オブジェクトを指定してください。';errMsgMap[ERR_CODE_BIND_UNBIND_DISPOSE_ROOT_ONLY]='コントローラのbind(), unbind()はルートコントローラでのみ使用可能です。';errMsgMap[ERR_CODE_CONTROLLER_TOO_FEW_ARGS]='h5.core.controller()メソッドは、バインドターゲットとコントローラ定義オブジェクトの2つが必須です。';errMsgMap[ERR_CODE_CONTROLLER_INIT_REJECTED_BY_USER]='コントローラ"{0}"の初期化処理がユーザによって中断されました。';errMsgMap[ERR_CODE_BIND_NOT_NODE]='コントローラ"{0}"のバインド対象がノードではありません。バインド対象に指定できるの���ノードかdocumentオブジェクトのみです。';errMsgMap[ERR_CODE_METHOD_OF_NO_ROOTELEMENT_CONTROLLER]='ルートエレメントの設定されていないコントローラのメソッド{0}は実行できません。';errMsgMap[ERR_CODE_METHOD_OF_DISPOSED_CONTROLLER]='disposeされたコントローラのメソッド{0}は実行できません。';errMsgMap[ERR_CODE_CONSTRUCT_CANNOT_CALL_UNBIND]='unbind()メソッドは__constructから呼ぶことはできません。';errMsgMap[ERR_CODE_CONTROLLER_DISPOSE_REJECTED_BY_USER]='コントローラ"{0}"のdispose処理がユーザによって中断されました。';errMsgMap[ERR_CODE_CONTROLLER_MANAGE_CHILD_NOT_CONTROLLER]='manageChildの第1引数はコントローラインスタンスである必要があります。';errMsgMap[ERR_CODE_CONTROLLER_MANAGE_CHILD_UNBINDED_CONTROLLER]='アンバインドされたコントローラをmanageChildすることはできません';errMsgMap[ERR_CODE_CONTROLLER_MANAGE_CHILD_BY_UNBINDED_CONTROLLER]='アンバインドされたコントローラのmanageChildは呼び出せません';errMsgMap[ERR_CODE_CONTROLLER_MANAGE_CHILD_NOT_ROOT_CONTROLLER]='manageChildの第1引数はルートコントローラである必要があります。';errMsgMap[ERR_CODE_CONTROLLER_UNMANAGE_CHILD_BY_UNBINDED_CONTROLLER]='アンバインドされたコントローラのunmanageChildは呼び出せません';errMsgMap[ERR_CODE_CONTROLLER_UNMANAGE_CHILD_NOT_CHILD_CONTROLLER]='unmanageChildの第1引数は呼び出し側の子コントローラである必要があります。';errMsgMap[ERR_CODE_CONTROLLER_UNMANAGE_CHILD_NO_ROOT_ELEMENT]='ルートエレメントの決定していない子コントローラのunmanageChildは、第2引数にfalseを指定することはできません';errMsgMap[ERR_CODE_CONTROLLER_INVALID_INIT_DEFAULT_PARAM]='コントローラ"{0}"のデフォルトパラメータ(__defaultArgs)がプレーンオブジェクトではありません。デフォルトパラメータにはプレーンオブジェクトを設定してください。';addFwErrorCodeMap(errMsgMap); /* del end */ // =========================================================================
+errMsgMap[ERR_CODE_BIND_NO_TARGET]='コントローラ"{0}"のバインド対象となる要素が存在しません。';errMsgMap[ERR_CODE_BIND_TOO_MANY_TARGET]='コントローラ"{0}"のバインド対象となる要素が2つ以上存在します。バインド対象は1つのみにしてください。';errMsgMap[ERR_CODE_TOO_FEW_ARGUMENTS]='正しい数の引数を指定して下さい。';errMsgMap[ERR_CODE_INVALID_CONTROLLER_NAME]='コントローラの名前は必須です。コントローラの__nameにコントローラ名を空でない文字列で設定して下さい。';errMsgMap[ERR_CODE_CONTROLLER_INVALID_INIT_PARAM]='コントローラ"{0}"の初期化パラメータがプレーンオブジェクトではありません。初期化パラメータにはプレーンオブジェクトを設定してください。';errMsgMap[ERR_CODE_CONTROLLER_ALREADY_CREATED]='指定されたオブジェクトは既にコントローラ化されています。';errMsgMap[ERR_CODE_CONTROLLER_CIRCULAR_REF]='コントローラ"{0}"で、参照が循環しているため、コントローラを生成できません。';errMsgMap[ERR_CODE_LOGIC_CIRCULAR_REF]='ロジック"{0}"で、参照が循環しているため、ロジックを生成できません。';errMsgMap[ERR_CODE_CONTROLLER_SAME_PROPERTY]='コントローラ"{0}"のプロパティ"{1}"はコントローラ化によって追加されるプロパティと名前が重複しています。';errMsgMap[ERR_CODE_EVENT_HANDLER_SELECTOR_THIS]='コントローラ"{0}"でセレクタ名にthisが指定されています。コントローラをバインドした要素自身を指定したい時はrootElementを指定してください。';errMsgMap[ERR_CODE_SAME_EVENT_HANDLER]='コントローラ"{0}"のセレクタ"{1}"に対して"{2}"というイベントハンドラが重複して設定されています。';errMsgMap[ERR_CODE_INVALID_LOGIC_NAME]='ロジック名は必須です。ロジックの__nameにロジック名を空でない文字列で設定して下さい。';errMsgMap[ERR_CODE_LOGIC_ALREADY_CREATED]='指定されたオブジェクトは既にロジック化されています。';errMsgMap[ERR_CODE_EXPOSE_NAME_REQUIRED]='コントローラ、もしくはロジックの __name が設定されていません。';errMsgMap[ERR_CODE_NOT_VIEW]='テンプレートはViewモジュールがなければ使用できません。';errMsgMap[ERR_CODE_BIND_TARGET_ILLEGAL]='コントローラ"{0}"のバインド対象には、セレクタ文字列、または、オブジェクトを指定してください。';errMsgMap[ERR_CODE_BIND_UNBIND_DISPOSE_ROOT_ONLY]='コントローラのbind(), unbind()はルートコントローラでのみ使用可能です。';errMsgMap[ERR_CODE_CONTROLLER_TOO_FEW_ARGS]='h5.core.controller()メソッドは、バインドターゲットとコントローラ定義オブジェクトの2つが必須です。';errMsgMap[ERR_CODE_CONTROLLER_INIT_REJECTED_BY_USER]='コントローラ"{0}"の初期化処理がユーザによって中断されました。';errMsgMap[ERR_CODE_BIND_NOT_NODE]='コントローラ"{0}"のバインド対象がノードではありません。バインド対象に指定できるのはノードかdocumentオブジェクトのみです。';errMsgMap[ERR_CODE_METHOD_OF_NO_ROOTELEMENT_CONTROLLER]='ルートエレメントの設定されていないコントローラのメソッド{0}は実行できません。';errMsgMap[ERR_CODE_METHOD_OF_DISPOSED_CONTROLLER]='disposeされたコントローラのメソッド{0}は実行できません。';errMsgMap[ERR_CODE_CONSTRUCT_CANNOT_CALL_UNBIND]='unbind()メソッドは__constructから呼ぶことはできません。';errMsgMap[ERR_CODE_CONTROLLER_DISPOSE_REJECTED_BY_USER]='コントローラ"{0}"のdispose処理がユーザによって中断されました。';errMsgMap[ERR_CODE_CONTROLLER_MANAGE_CHILD_NOT_CONTROLLER]='manageChildの第1引数はコントローラインスタンスである必要があります。';errMsgMap[ERR_CODE_CONTROLLER_MANAGE_CHILD_UNBINDED_CONTROLLER]='アンバインドされたコントローラをmanageChildすることはできません';errMsgMap[ERR_CODE_CONTROLLER_MANAGE_CHILD_BY_UNBINDED_CONTROLLER]='アンバインドされたコントローラのmanageChildは呼び出せません';errMsgMap[ERR_CODE_CONTROLLER_MANAGE_CHILD_NOT_ROOT_CONTROLLER]='manageChildの第1引数はルートコントローラである必要があります。';errMsgMap[ERR_CODE_CONTROLLER_UNMANAGE_CHILD_BY_UNBINDED_CONTROLLER]='アンバインドされたコントローラのunmanageChildは呼び出せません';errMsgMap[ERR_CODE_CONTROLLER_UNMANAGE_CHILD_NOT_CHILD_CONTROLLER]='unmanageChildの第1引数は呼び出し側の子コントローラである必要があります。';errMsgMap[ERR_CODE_CONTROLLER_UNMANAGE_CHILD_NO_ROOT_ELEMENT]='ルートエレメントの決定していない子コントローラのunmanageChildは、第2引数にfalseを指定することはできません';errMsgMap[ERR_CODE_CONTROLLER_INVALID_INIT_DEFAULT_PARAM]='コントローラ"{0}"のデフォルトパラメータ(__defaultArgs)がプレーンオブジェクトではありません。デフォルトパラメータにはプレーンオブジェクトを設定してください。';addFwErrorCodeMap(errMsgMap); /* del end */ // =========================================================================
 //
 // Cache
 //
@@ -2921,8 +2945,8 @@ return _isSVGOffsetCollect;};}(); // --------------------------------- コント
 	 * @param {Object} controllerDefObj
 	 * @param {String} controllerName
 	 */function validateControllerDef(isRoot,targetElement,controllerDefObj,controllerName){ // コントローラ定義オブジェクトに、コントローラが追加するプロパティと重複するプロパティがあるかどうかチェック
-if(!controllerPropertyMap){ // 重複チェックが初めて呼ばれた時にコントローラプロパティマップを生成してチェックで使用する
-controllerPropertyMap={};var tempInstance=new Controller(null,'a');for(var p in tempInstance){if(tempInstance.hasOwnProperty(p)&&p!=='__name'&&p!=='__templates'&&p!=='__meta'){controllerPropertyMap[p]=1;}}tempInstance=null;var proto=Controller.prototype;for(var p in proto){if(proto.hasOwnProperty(p)){controllerPropertyMap[p]=null;}}proto=null;}for(var prop in controllerDefObj){if(prop in controllerPropertyMap){ // コントローラが追加するプロパティと同じプロパティ名のものが���ればエラー
+if(!controllerPropertyMap){ // 重複チェックが初めて呼ばれ���時にコントローラプロパティマップを生成してチェックで使用する
+controllerPropertyMap={};var tempInstance=new Controller(null,'a');for(var p in tempInstance){if(tempInstance.hasOwnProperty(p)&&p!=='__name'&&p!=='__templates'&&p!=='__meta'){controllerPropertyMap[p]=1;}}tempInstance=null;var proto=Controller.prototype;for(var p in proto){if(proto.hasOwnProperty(p)){controllerPropertyMap[p]=null;}}proto=null;}for(var prop in controllerDefObj){if(prop in controllerPropertyMap){ // コントローラが追加するプロパティと同じプロパティ名のものがあればエラー
 throwFwError(ERR_CODE_CONTROLLER_SAME_PROPERTY,[controllerName,prop],{controllerDefObj:controllerDefObj});}}} /**
 	 * コントローラ定義オブジェクトの子孫コントローラ定義が循環参照になっているかどうかをチェックします。
 	 *
@@ -3326,7 +3350,7 @@ if(isUnbinding(controller)||context.isExecutedBind){return;}if(!context.isRoot){
 if(!controller.rootController.isPostInit){ // 通常、この時点ではルートのpostInitは未完了であり、
 // 以降の処理(イベントハンドラのバインドとtriggerReady)は、
 // ルートのpostInit後の処理で行うので何もしない
-return;} // た���し、例えばrootの__readyのタイミングでこのコントローラがmanageChildで子コントローラになったなどの場合は、
+return;} // ただし、例えばrootの__readyのタイミングでこのコントローラがmanageChildで子コントローラになったなどの場合は、
 // この時点でルートのpostInit後の処理が終わっている。
 // その場合、このコントローラのイベントハンドラのバインドは自分で行い、
 // かつこのコントローラの__readyを実行するためtriggerReadyを呼び出す必要がある
@@ -3553,7 +3577,7 @@ normalizeEventObjext(event);return new EventContext(bindObj.controller,event,evA
 	 * 初期化イベントコンテキストをセットアップします。
 	 *
 	 * @private
-	 * @param {Controller} rootController ルートコントローラ
+	 * @param {Controller} rootController ル���トコントローラ
 	 * @returns {Object} argsを持つオブジェクト
 	 */function createInitializationContext(controller){return {args:controller.__controllerContext.args};} /**
 	 * コントローラとその子孫コントローラのrootElementと、view.__controllerにnullをセットします。
@@ -3561,7 +3585,7 @@ normalizeEventObjext(event);return new EventContext(bindObj.controller,event,evA
 	 * @private
 	 * @param {Controller} controller コントローラ
 	 */function unbindRootElement(controller){doForEachControllerGroups(controller,function(c){c.rootElement=null;c.view.__controller=null;});} /**
-	 * コントローラをバインドする対象となる要素���返します。
+	 * コントローラをバインドする対象となる要素を返します。
 	 *
 	 * @private
 	 * @param {String|DOM|jQuery} element セレクタ、DOM要素、もしくはjQueryオブジェクト
@@ -3644,7 +3668,7 @@ throw error;}return promises;} /**
 // rootControllerが設定される前(__construct内からdispose()を呼び出した場合)のことを考慮して、
 // rootControllerを取得する前にisRootを見てtrueならcontrollerをルートコントローラとみなす
 var rootController=controller.__controllerContext&&(controller.__controllerContext.isRoot?controller:controller.rootController);if(!rootController){ // rootControllerが無い場合、
-// エラーオブジェクトがあればエラーを投げて終了。エラーのない場合は何もしないで終了。
+// エラーオブジェクトがあればエラーを投げて終了。エラーのない場合は何もしないで終了���
 if(e){ // ライフサイクルの中でdispose()して、__unbindや__disposeでエラーが出た時に、
 // ライフサイクル呼び出しを包んでいるtry-catchのcatch節から再度disposeControllerが呼ばれる。
 // その時に、dispose()の呼び出しで起きたエラーを飲まないようにするため、ここで再スローする。
@@ -3899,7 +3923,7 @@ addDoneListener(waitingPromises[i],logic,executeReady);}}}executeReady();}execIn
 	 *
 	 * @private
 	 */function isSameBindTarget(target1,target2){if(target1===target2){ // 同一インスタンスならtrue
-return true;}var isT1Jquery=isJQueryObject(target1);var isT2Jquery=isJQueryObject(target2);if(!isT1Jquery&&!isT2Jquery){ // どちらもjQueryオブジェクトでないならfalse;
+return true;}var isT1Jquery=isJQueryObject(target1);var isT2Jquery=isJQueryObject(target2);if(!isT1Jquery&&!isT2Jquery){ // どちら���jQueryオブジェクトでないならfalse;
 return false;} // どちらかがjQueryオブジェクトなら配列にして比較
 var t1Ary=isT1Jquery?target1.toArray():[target1];var t2Ary=isT2Jquery?target2.toArray():[target2];if(t1Ary.length!==t2Ary.length){ // 長さが違うならfalse
 return false;}for(var i=0,l=t1Ary.length;i<l;i++){if(t1Ary[i]!==t2Ary[i]){return false;}}return true;} /**
@@ -4037,7 +4061,7 @@ controller.__controllerContext.args=args;} /**
 		 * @memberOf Controller
 		 * @name parentController
 		 */controller.parentController=null; /**
-		 * __templatesに指定したテンプレートファイルの読み込みに、成功または失敗したかの状態を持つPromiseオブジェクト。
+		 * __templatesに指定したテンプレートファイルの読み込み���、成功または失敗したかの状態を持つPromiseオブジェクト。
 		 * このオブジェクトが持つ以下の関数で、状態をチェックすることができます。
 		 * <p>
 		 * <b>state()</b> <table border="1">
@@ -4408,7 +4432,7 @@ error=new Error();error.detail=msgOrErrObj;}error.customType=customType;throw er
 						 * イベントハンドラを動的にバインドします。
 						 * <p>
 						 * 第1引数targetの指定にはコントローラのイベントハンドラ記述と同様の記述ができます。
-						 * つまりセレクタの場合���ルートエレメントを起点に選択します。またグローバルセレクタで指定することもできます。、
+						 * つまりセレクタの場合はルートエレメントを起点に選択します。またグローバルセレクタで指定することもできます。、
 						 * </p>
 						 * <p>
 						 * ここで追加したハンドラはコントローラのunbind時にアンバインドされます。
@@ -4742,7 +4766,7 @@ var meta=controller.__meta;for(var i=0,l=cache.childControllerProperties.length;
 var prop=cache.childControllerProperties[i];var childController=clonedControllerDef[prop]; // 子コントローラにパラメータを引き継ぐかどうか
 var childArgs=null;if(meta&&meta[prop]&&meta[prop].inheritArgs){childArgs=args;}if(isDependency(childController)){ // Dependencyオブジェクトが指定されていた場合は依存関係を解決する
 var promise=childController.resolve('namespace');promisesForTriggerInit.push(promise);promise.done(function(childProp,childControllerPromise,cp){return function(c){var child=createAndBindController(null,$.extend(true,{},c),cp,{isInternal:true,parentController:controller,rootController:rootController,promisesForTriggerInit:promisesForTriggerInit,async:async});if(child==null){ // __constructで失敗したりdisposeされた場合はnullが返ってくるので
-// 子コントローラの__constructが正しく実行されなかった場合は以降何もしない
+// 子コン���ローラの__constructが正しく実行されなかった場合は以降何もしない
 return null;}controller[childProp]=child;controller.__controllerContext.childControllers.push(child); // createAndBindControllerの呼び出しが終わったら、プロミスを取り除く
 promisesForTriggerInit.splice($.inArray(childControllerPromise,promisesForTriggerInit),1);};}(prop,promise,childArgs));}else {var child=createAndBindController(null,$.extend(true,{},clonedControllerDef[prop]),childArgs,{isInternal:true,parentController:controller,rootController:rootController});if(child==null){ // __constructで失敗したりdisposeされた場合はnullが返ってくるので
 // 子コントローラの__constructが正しく実行されなかった場合は以降何もしない
@@ -4920,7 +4944,7 @@ var nestedCriterias=compiledCriteria.nestedCriterias;for(var i=0,l=nestedCriteri
 	 */function createChangeListener(query){var match=query._criteria.match;var resultArray=query.result;return function(ev){var removed=ev.removed;var created=ev.created;var changed=ev.changed;var isSorted=true;for(var i=0,l=removed.length;i<l;i++){ // resultArrayの何番目に入っているアイテムか
 var resultIndex=$.inArray(removed[i],resultArray._src); // DataModelから削除されたら結果からも削除
 if(resultIndex!==-1){resultArray.splice(resultIndex,1);}}for(var i=0,l=changed.length;i<l;i++){ // resultArrayの何番目に入っているアイテムか(入っていないなら-1)
-var resultIndex=$.inArray(changed[i].target,resultArray._src); // 中身が変���されたら再ソート
+var resultIndex=$.inArray(changed[i].target,resultArray._src); // 中身が変更されたら再ソート
 isSorted=false; // マッチするかどうかチェックして、
 // マッチするかつ結果にないものなら追加
 // マッチしないかつ結果にあるものなら取り除く
@@ -5050,7 +5074,7 @@ if(this._orderFunction){result.sort(this._orderFunction);}else if(this._addedOrd
 // p1,p2が2つとも昇順で登録されている場合、p1で昇順ソートになっていて、p1が同じものについてはp2で昇順ソートされるようにする
 for(var i=0;i<keysLength;i++){var order=addedOrders[i];var key=order.key;var isAsc=order.isAsc;var val1=item1.get(key);var val2=item2.get(key);if(val1>val2){return isAsc?1:-1;}if(val1<val2){return isAsc?-1:1;}}return 0;});}return new QueryResult(result);}, // TODO Liveクエリの仕様は再検討する
 //		/**
-//		 * クエリをライブクエリにします
+//		 * クエリをライブクエリにし���す
 //		 * <p>
 //		 * ライブクエリにすると、検索条件がセットされた時やDataModelに変更があった時に検索結果が動的に変更されます。(executeを呼ぶ必要がありません)
 //		 * </p>
@@ -5226,7 +5250,7 @@ function formatDescriptorError(code,msgSrc,msgParam,detail){var msg=h5.u.str.for
 	 * 各エラーコードに対応するメッセージ
 	 */var errMsgMap={};errMsgMap[ERR_CODE_REQUIRE_SCHEMA]='スキーマオブジェクトが指定されていません。';errMsgMap[ERR_CODE_INVALID_SCHEMA]='スキーマ定義オブジェクトが不正です。';errMsgMap[ERR_CODE_INVALID_ITEM_VALUE]='Itemのsetterに渡された値がスキーマで指定された型・制約に違反しています。データモデル={0} 違反したプロパティ={1}';errMsgMap[ERR_CODE_DEPEND_PROPERTY]='depend指定されているプロパティに値をセットすることはできません。データモデル={0} 違反したプロパティ={1}';errMsgMap[ERR_CODE_CANNOT_SET_NOT_DEFINED_PROPERTY]='スキーマに定義されていないプロパティに値をセットすることはできません。データモデル={0} 違反したプロパティ={1}';errMsgMap[ERR_CODE_CANNOT_GET_NOT_DEFINED_PROPERTY]='スキーマに定義されていないプロパティは取得できません。データモデル={0} 違反したプロパティ={1}';errMsgMap[ERR_CODE_CALC_RETURNED_INVALID_VALUE]='calcで返却された値が、スキーマで指定された型・制約に違反しています。データモデル={0} プロパティ={1} 返却値={2}';errMsgMap[ERR_CODE_INVALID_COPYFROM_ARGUMENT]='copyFromの引数が不正です。配列を指定してください。引数位置={0}、値={1}';errMsgMap[ERR_CODE_INVALID_MANAGER_NAME]='マネージャ名が不正です。識別子として有効な文字列を指定してください。';errMsgMap[ERR_CODE_NO_ID]='データアイテムの生成にはID項目の値の設定が必須です。データモデル={0} IDプロパティ={1}';errMsgMap[ERR_CODE_INVALID_DESCRIPTOR]='データモデルディスクリプタにエラーがあります。';errMsgMap[ERR_CODE_CANNOT_SET_ID]='id指定されたプロパティを変更することはできません。データモデル={0} プロパティ={1}';errMsgMap[ERR_CODE_DESCRIPTOR_CIRCULAR_REF]='Datamaneger.createModelに渡された配列内のディスクリプタについて、baseやtypeによる依存関係が循環参照しています。';errMsgMap[ERR_CODE_CANNOT_CHANGE_REMOVED_ITEM]='DataModelに属していないDataItem、またはDataManagerに属していないDataModelのDataItemの中身は変更できません。データアイテムID={0}, メソッド={1}';errMsgMap[ERR_CODE_CANNOT_CHANGE_DROPPED_MODEL]='DataManagerに属していないDataModelの中身は変更できません。モデル名={0}, メソッド={1}';errMsgMap[ERR_CODE_INVALID_CREATE_ARGS]='DataModel.createに渡された引数が不正です。オブジェクトまたは、配列を指定してください。'; // メッセージの登録
 addFwErrorCodeMap(errMsgMap); // detailに格納するメッセージ
-var DESCRIPTOR_VALIDATION_ERROR_MSGS={};DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_DUPLICATED_ID]='ID指定されているプロパティが複数あります。ID指定は1つのプロパティのみに指定してください。';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_NO_ID]='ID指定されているプロパティがありません。ID指定は必須です。';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_INVALID_PROPERTY_NAME]='{0}をプロパティ名に指定できません。半角英数字,_,$ で構成される���字列で、先頭は数字以外である必要があります。';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_ID_DEPEND]='"{0}"プロパティの定義にエラーがあります。id指定されたプロパティにdependを指定することはできません。';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_DEPEND_ON]='"{0}"プロパティプロパティの定義にエラーがあります。depend.onに指定されたプロパティが存在しません。';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_DEPEND_CALC]='"{0}"プロパティプロパティの定義にエラーがあります。depend.calcには関数を指定する必要があります';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_INVALID_TYPE]='"{0}"プロパティプロパティの定義にエラーがあります。typeは文字列で指定して下さい。';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_TYPE]='プロパティの定義にエラーがあります。typeに指定された文字列が不正です "{1}"';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_TYPE_DATAMODEL]='"{0}"プロパティの定義にエラーがあります。 typeに指定されたデータモデル"{1}"は存在しません';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_TYPE_ENUM_NO_ENUMVALUE]='"{0}"プロパティの定義にエラーがあります。 タイプにenumを指定する場合はenumValueも指定する必要があります';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_INVALID_CONSTRAINT]='"{0}"プロパティの定義にエラーがあります。 constraintはオブジェクトで指定してください';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_INVALID_CONSTRAINT_NOTNULL_NOTEMPTY]='"{0}"プロパティの定義にエラーがあります。 constraint.{1} の指定が不正です。trueまたはfalseで指定してください。';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_INVALID_CONSTRAINT_MIN_MAX]='"{0}"プロパティの定義にエラーがあります。 constraint.{1} は、数値で指定してください。typeにintegerを指定している場合は整数値で指定する必要があります';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_TYPE_CONSTRAINT]='"{0}"プロパティの定義にエラーがあります。 constraint.{1} は、type:{2}の項目に対して指定することはできません。';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_INVALID_CONSTRAINT_PATTERN]='"{0}"プロパティ constraint.{1}は正規表現オブジェクトで指定してください。';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_INVALID_CONSTRAINT_MINLENGTH_MAXLENGTH]='"{0}"プロパティの定義にエラーがあります。 constraint.{1}には正の整数を指定してください';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_CONSTRAINT_CONFLICT]='"{0}"プロパティの定義にエラーがあります。 constraintに矛盾する指定があります。{1},{2}';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_ENUMVALUE_TYPE]='"{0}"プロパティの定義にエラーがあります。 enumValueはtypeに"enum"またはその配列が指定されている場合のみ指定可能です';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_INVALID_ENUMVALUE]='"{0}"プロパティの定義にエラーがあります。 enumValueはnull,undefinedを含まない長さ1以上の配列を指定してください';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_DEFAULTVALUE_ID]='"{0}"プロパティの定義にエラーがあります。id指定した項目にdefaultValueを設定することはできません';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_INVALIDATE_DEFAULTVALUE]='"{0}"プロパティのdefaultValueに設定された値"{1}"は、typeまたはconstraintに定義された条件を満たしていません';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_CONSTRAINT_CONFLICT_ID]='"{0}"プロパティの定義にエラーがあります。id指定された項目にconstraint.{1}:{2}を指定することはできません';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_DEFAULTVALUE_DEPEND]='"{0}"プロパティの定義にエラーがあります。dependが指定された項目にdefaultValueを指定することはできません。';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_DEPEND_CIRCULAR_REF]='"{0}"プロパティの定義にエラーがあります。depend.onに指定されたプロパティの依存関係が循環しています';DESCRIPTOR_VALIDATION_ERROR_MSGS[DESC_ERR_DETAIL_NOT_OBJECT]='DataModelのディスクリプタにはオブジェクトを指定してください。';DESCRIPTOR_VALIDATION_ERROR_MSGS[DESC_ERR_DETAIL_INVALID_NAME]='データモデル名が不正です。使用できる文字は、半角英数字、_、$、のみで、先頭は数字以外である必要があります。';DESCRIPTOR_VALIDATION_ERROR_MSGS[DESC_ERR_DETAIL_INVALID_BASE]='baseの指定が不正です。指定する場合は、継承したいデータモデル名の先頭に"@"を付けた文字列を指定してください。';DESCRIPTOR_VALIDATION_ERROR_MSGS[DESC_ERR_DETAIL_NO_EXIST_BASE]='baseの指定が不正です。指定されたデータモデル{0}は存在しません。';DESCRIPTOR_VALIDATION_ERROR_MSGS[DESC_ERR_DETAIL_NO_SCHEMA]='schemaの指定が不正です。baseの指定がない場合はschemaの指定は必須です。';DESCRIPTOR_VALIDATION_ERROR_MSGS[DESC_ERR_DETAIL_SCHEMA_IS_NOT_OBJECT]='schemaの指定が不正です。schemaはオブジェクトで指定してください。';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_ID_TYPE]='"{0}"プロパティの定義にエラーがあります。id指定されたプロパティには"string","integer"以外のtypeを指定することはできません。'; // ログメッセージ
+var DESCRIPTOR_VALIDATION_ERROR_MSGS={};DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_DUPLICATED_ID]='ID指定されているプロパティが複数あります。ID指定は1つのプロパティのみに指定してください。';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_NO_ID]='ID指定されているプロパティがありません。ID指定は必須です。';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_INVALID_PROPERTY_NAME]='{0}をプロパティ名に指定できません。半角英数字,_,$ で構成される文字列で、先頭は数字以外である必要があります。';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_ID_DEPEND]='"{0}"プロパティの定義にエラーがあります。id指定されたプロパティにdependを指定することはできません。';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_DEPEND_ON]='"{0}"プロパティプロパティの定義にエラーがあります。depend.onに指定されたプロパティが存在しません。';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_DEPEND_CALC]='"{0}"プロパティプロパティの定義にエラーがあります。depend.calcには関数を指定する必要があります';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_INVALID_TYPE]='"{0}"プロパティプロパティの定義にエラーがあります。typeは文字列で指定して下さい。';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_TYPE]='プロパティの定義にエラーがあります。typeに指定された文字列が不正です "{1}"';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_TYPE_DATAMODEL]='"{0}"プロパティの定義にエラーがあります。 typeに指定されたデータモデル"{1}"は存在しません';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_TYPE_ENUM_NO_ENUMVALUE]='"{0}"プロパティの定義にエラーがあります。 タイプにenumを指定する場合はenumValueも指定する必要があります';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_INVALID_CONSTRAINT]='"{0}"プロパティの定義にエラーがあります。 constraintはオブジェクトで指定してください';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_INVALID_CONSTRAINT_NOTNULL_NOTEMPTY]='"{0}"プロパティの定義にエラーがあります。 constraint.{1} の指定が不正です。trueまたはfalseで指定してください。';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_INVALID_CONSTRAINT_MIN_MAX]='"{0}"プロパティの定義にエラーがあります。 constraint.{1} は、数値で指定してください。typeにintegerを指定している場合は整数値で指定する必要があります';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_TYPE_CONSTRAINT]='"{0}"プロパティの定義にエラーがあります。 constraint.{1} は、type:{2}の項目に対して指定することはできません。';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_INVALID_CONSTRAINT_PATTERN]='"{0}"プロパティ constraint.{1}は正規表現オブジェクトで指定してください。';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_INVALID_CONSTRAINT_MINLENGTH_MAXLENGTH]='"{0}"プロパティの定義にエラーがあります。 constraint.{1}には正の整数を指定してください';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_CONSTRAINT_CONFLICT]='"{0}"プロパティの定義にエラーがあります。 constraintに矛盾する指定があります。{1},{2}';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_ENUMVALUE_TYPE]='"{0}"プロパティの定義にエラーがあります。 enumValueはtypeに"enum"またはその配列が指定されている場合のみ指定可能です';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_INVALID_ENUMVALUE]='"{0}"プロパティの定義にエラーがあります。 enumValueはnull,undefinedを含まない長さ1以上の配列を指定してください';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_DEFAULTVALUE_ID]='"{0}"プロパティの定義にエラーがあります。id指定した項目にdefaultValueを設定することはできません';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_INVALIDATE_DEFAULTVALUE]='"{0}"プロパティのdefaultValueに設定された値"{1}"は、typeまたはconstraintに定義された条件を満たしていません';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_CONSTRAINT_CONFLICT_ID]='"{0}"プロパティの定義にエラーがあります。id指定された項目にconstraint.{1}:{2}を指定することはできません';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_DEFAULTVALUE_DEPEND]='"{0}"プロパティの定義にエラーがあります。dependが指定された項目にdefaultValueを指定することはできません。';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_DEPEND_CIRCULAR_REF]='"{0}"プロパティの定義にエラーがあります。depend.onに指定されたプロパティの依存関係が循環しています';DESCRIPTOR_VALIDATION_ERROR_MSGS[DESC_ERR_DETAIL_NOT_OBJECT]='DataModelのディスクリプタにはオブジェクトを指定してください。';DESCRIPTOR_VALIDATION_ERROR_MSGS[DESC_ERR_DETAIL_INVALID_NAME]='データモデル名が不正です。使用できる文字は、半角英数字、_、$、のみで、先頭は数字以外である必要があります。';DESCRIPTOR_VALIDATION_ERROR_MSGS[DESC_ERR_DETAIL_INVALID_BASE]='baseの指定が不正です。指定する場合は、継承したいデータモデル名の先頭に"@"を付けた文字列を指定してください。';DESCRIPTOR_VALIDATION_ERROR_MSGS[DESC_ERR_DETAIL_NO_EXIST_BASE]='baseの指定が不正です。指定されたデータモデル{0}は存在しません。';DESCRIPTOR_VALIDATION_ERROR_MSGS[DESC_ERR_DETAIL_NO_SCHEMA]='schemaの指定が不正です。baseの指定がない場合はschemaの指定は必須です。';DESCRIPTOR_VALIDATION_ERROR_MSGS[DESC_ERR_DETAIL_SCHEMA_IS_NOT_OBJECT]='schemaの指定が不正です。schemaはオブジェクトで指定してください。';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_ID_TYPE]='"{0}"プロパティの定義にエラーがあります。id指定されたプロパティには"string","integer"以外のtypeを指定することはできません。'; // ログメッセージ
 var MSG_ERROR_DUP_REGISTER='同じ名前のデータモデルを登録しようとしました。同名のデータモデルの2度目以降の登録は無視されます。マネージャ名は {0}, 登録しようとしたデータモデル名は {1} です。'; /* del end */ // =========================================================================
 //
 // Cache
@@ -5255,12 +5279,12 @@ var MSG_ERROR_DUP_REGISTER='同じ名前のデータモデルを登録しよう�
 		 * @memberOf DataItem
 		 * @param {String} [key] プロパティキー。指定のない場合は、アイテムの持つプロパティ名をキーに、そのプロパティの値を持つオブジェクトを返します。
 		 * @returns Any 指定されたプロパティの値。引数なしの場合はプロパティキーと値を持つオブジェクト。
-		 */get:function get(key){if(arguments.length===0){return $.extend({},this._values);} // DataItemの場合はモデルから、ObsItemの場合はObsItemのインスタンスからschemaを取得
+		 */get:function get(key){if(arguments.length===0){return $.extend({},this._values);} // DataItemの場合はモデルから、ObsItemの場合はObsItemのインスタンスか���schemaを取得
 var model=this._model;var schema=model?model.schema:this.schema;if(!schema.hasOwnProperty(key)){ //スキーマに存在しないプロパティはgetできない（プログラムのミスがすぐわかるように例外を送出）
 throwFwError(ERR_CODE_CANNOT_GET_NOT_DEFINED_PROPERTY,[model?model.name:NOT_AVAILABLE,key]);}return getValue(this,key);}, /**
 		 * 指定されたキーのプロパティに値をセットします。
 		 * <p>
-		 * 複数のプロパティに対して値を一度にセットしたい場合は、{ キー1: 値1, キー2: 値2, ... }という���造をもつオブジェクトを1つだけ渡してください。
+		 * 複数のプロパティに対して値を一度にセットしたい場合は、{ キー1: 値1, キー2: 値2, ... }という構造をもつオブジェクトを1つだけ渡してください。
 		 * </p>
 		 * <p>
 		 * 1つのプロパティに対して値をセットする場合は、 item.set(key, value); のように2つの引数でキーと値を個別に渡すこともできます。
@@ -5519,7 +5543,7 @@ pushErrorReason(SCHEMA_ERR_DETAIL_TYPE_CONSTRAINT,schemaProp,p,typeObj.elmType);
 pushErrorReason(SCHEMA_ERR_DETAIL_INVALID_CONSTRAINT_NOTNULL_NOTEMPTY,schemaProp,p);}else if(isId&&!val){ // id項目にnotEmpty: false が指定されていたらエラー
 pushErrorReason(SCHEMA_ERR_DETAIL_CONSTRAINT_CONFLICT_ID,schemaProp,p,val);}break;default: // type:'string'以外の項目にnotEmptyが指定されていたらエラー
 pushErrorReason(SCHEMA_ERR_DETAIL_TYPE_CONSTRAINT,schemaProp,p,typeObj.elmType);}break;case 'pattern':switch(typeObj.elmType){case 'string':if($.type(val)!=='regexp'){ // patternにRegExpオブジェクト以外のものが指定されていたらエラー
-pushErrorReason(SCHEMA_ERR_DETAIL_INVALID_CONSTRAINT_PATTERN,schemaProp,p);}break;default: // type:'string'以外の項目にpatterが指定されていたらエラー
+pushErrorReason(SCHEMA_ERR_DETAIL_INVALID_CONSTRAINT_PATTERN,schemaProp,p);}break;default: // type:'string'以外の項目にpatterが指定されていた���エラー
 pushErrorReason(SCHEMA_ERR_DETAIL_TYPE_CONSTRAINT,schemaProp,p,typeObj.elmType);}break;}} // constraintの中身に矛盾がないかどうかチェック
 if(constraint.notEmpty&&constraint.maxLength===0){ // notNullなのにmanLengthが0
 pushErrorReason(SCHEMA_ERR_DETAIL_CONSTRAINT_CONFLICT,schemaProp,'notEmpty','maxLength');}if(constraint.min!=null&&constraint.max!=null&&constraint.min>constraint.max){ // min > max
@@ -5756,7 +5780,7 @@ var validateResult=validateItemValue(prop,newValue,isId);if(validateResult.lengt
 var readyProps=[]; //先に、すべてのプロパティの整合性チェックを行う
 for(var prop in valueObj){if(ignoreProps&&$.inArray(prop,ignoreProps)!==-1){ //このpropプロパティは無視する
 continue;}var oldValue=getValue(item,prop);var newValue=valueObj[prop]; // depend指定されている項目はsetしない
-if(schema[prop]&&schema[prop].depend){ // dependなプロパティの場合、現在の値とこれから代入しようとして���る値が
+if(schema[prop]&&schema[prop].depend){ // dependなプロパティの場合、現在の値とこれから代入しようとしている値が
 // 厳密等価でtrueになる場合に限り、代入を例外にせず無視する。
 // これは、item.get()の戻り値のオブジェクトをそのままset()しようとしたときに
 // dependのせいでエラーにならないようにするため。
@@ -5885,7 +5909,7 @@ var actualInitialValue=$.extend({},defaultInitialValue);for(var p in userInitial
 	 * </p>
 	 *
 	 * @param {Object} desc データモデルの場合はデスクリプタ。
-	 * @param {Object} manager データモデルマネー���ャ。
+	 * @param {Object} manager データモデルマネージャ。
 	 * @returns {Object} 生成したスキーマオブジェクト。
 	 */function extendSchema(desc,manager){var base=desc.base;var baseSchema;if(base){ // base指定がある場合はそのモデルを取得
 var baseModel=manager.models[base.slice(1)]; // base指定されたモデルのschemaを取得
@@ -5973,7 +5997,7 @@ ev.props[propName]={oldValue:oldValue,newValue:getValue(item,propName)};item.dis
 		 */this.models={}; /**
 		 * データモデルマネージャ名
 		 * <p>
-		 * <a href="h5.core.data.html#createManager">h5.core.data.createManager()</a>の第一引数に指定した値が格納されます。
+		 * <a href="h5.core.data.html#createManager">h5.core.data.createManager()</a>の第一引数に指定���た値が格納されます。
 		 * </p>
 		 *
 		 * @since 1.1.0
@@ -5992,7 +6016,7 @@ ev.props[propName]={oldValue:oldValue,newValue:getValue(item,propName)};item.dis
 		 * @type {Object}
 		 * @memberOf DataModelManager
 		 */this._updateLogs=null; /**
-		 * endUpdate時に配列プロパティに���いてイベントをあげないかどうか。
+		 * endUpdate時に配列プロパティについてイベントをあげないかどうか。
 		 * <p>
 		 * デフォルトではfalseで、endUpdate時にイベントをあげます。 <br>
 		 * DataItem作成時にFW内部で登録したchangeListenerからendUpdateを呼ぶ場合にこのフラグはtrueになり、<br>
@@ -6098,7 +6122,7 @@ var firstCRLog=getFirstCRLog(itemLogs,i);if(logType===UPDATE_LOG_TYPE_CREATE){ /
 //これをイベントで判別可能にするため、remove->createだった場合はcreatedではなくrecreatedに入れる。
 //なお、begin->remove->create->remove->create->endのような場合、
 //途中のcreate->removeは（begin-endの外から見ると）無視してよいので、
-//oldItemには「最初のremoveのときのインスタンス」、newItemには「最後のcreateのときのインスタンス」が入る。
+//oldItemには「最初のremoveのときのインスタンス」、newItemには「最後のcreateのときのイ���スタンス」が入る。
 //また、begin->create->remove->create->endの場合は、begin-endの外から見ると"create"扱いにすればよい。
 //なお、createイベントはDataItemからは発火しない。(createはdependプロパティ内でのみ起こる)
 if(firstCRLog&&firstCRLog.type===UPDATE_LOG_TYPE_REMOVE){recreated.push({id:itemId,oldItem:firstCRLog.item,newItem:log.item});}else {created.push(log.item);}}else { //ここに来たら必ずUPDATE_LOG_TYPE_REMOVE
@@ -6311,7 +6335,7 @@ if(itemId===''||itemId==null){throwFwError(ERR_CODE_NO_ID,[this.name,idKey]);} /
 var obj=this._schemaInfo._createInitialValueObj(valueObj);validateValueObj(this.schema,this._schemaInfo._validateItemValue,obj,this);}}else {for(var i=0,l=items.length;i<l;i++){var valueObj=items[i];validateValueObj(this.schema,this._schemaInfo._validateItemValue,valueObj,this);}}}catch(e){return e;}return null;}, /**
 		 * 指定されたIDのデータアイテムを返します。
 		 * <p>
-		 * 当該IDを持つアイテムをこの���ータモデルが保持していない場合はnullを返します。 引数にIDの配列を渡した場合に一部のIDのデータアイテムが存在しなかった場合、
+		 * 当該IDを持つアイテムをこのデータモデルが保持していない場合はnullを返します。 引数にIDの配列を渡した場合に一部のIDのデータアイテムが存在しなかった場合、
 		 * 戻り値の配列の対応位置にnullが入ります。
 		 * </p>
 		 * <p>
@@ -6653,7 +6677,7 @@ var ret=doProcess.apply(this,arguments);this.length=this._src.length;var evAfter
 /**
 	 * コンパイルしようとしたテンプレートが文字列でない
 	 */var ERR_CODE_TEMPLATE_COMPILE_NOT_STRING=7000; /**
-	 * テンプレートIDが不正である時に発生するエラー
+	 * テンプレートID���不正である時に発生するエラー
 	 */var ERR_CODE_TEMPLATE_INVALID_ID=7002; /**
 	 * load()呼び出し時に引数にファイル名またはファイル名の配列が渡されなかった時に発生するエラー
 	 */var ERR_CODE_INVALID_FILE_PATH=7004; /**
@@ -6749,7 +6773,7 @@ var validTemplates=[];var invalidTemplate;for(var i=0,l=resources.length;i<l;i++
 view.register(invalidTemplate.id,invalidTemplate.content);}catch(e){ // 登録でエラーが発生したらrejectする
 // detailにエラーが発生した時のリソースのurlとpathを追加する
 e.detail.url=resources[i].url;e.detail.path=resources[i].path;return dfd.reject(e);}} // 全てvalidならすべてのテンプレートを登録
-for(var i=0,l=validTemplates.length;i<l;i++){view.register(validTemplates[i].id,validTemplates[i].content);} // TODO doneハンドラに渡す引数を作成
+for(var i=0,l=validTemplates.length;i<l;i++){view.register(validTemplates[i].id,validTemplates[i].content);} // TODO doneハン���ラに渡す引数を作成
 dfd.resolve();},function(e){fwLogger.error(e.message);dfd.reject(e);});return dfd.promise();}, /**
 		 * Viewインスタンスに登録されている、利用可能なテンプレートのIDの配列を返します。
 		 *
@@ -6758,7 +6782,7 @@ dfd.resolve();},function(e){fwLogger.error(e.message);dfd.reject(e);});return df
 		 * @function
 		 * @returns {String[]} テンプレートIDの配列
 		 */getAvailableTemplates:function getAvailableTemplates(){var ids=[];for(var id in this.__cachedTemplates){ids.push(id);}return ids;}, /**
-		 * Viewインスタンスに、指定されたIDとテンプレート���字列からテンプレートを1件登録します。
+		 * Viewインスタンスに、指定されたIDとテンプレート文字列からテンプレートを1件登録します。
 		 * <p>
 		 * 指定されたIDのテンプレートがすでに存在する場合は上書きします。 templateStringが不正な場合はエラーを投げます。
 		 * </p>
@@ -6863,7 +6887,7 @@ dfd.resolve();},function(e){fwLogger.error(e.message);dfd.reject(e);});return df
 		 * <p>
 		 * 注意:<br>
 		 * このメソッドではバインド対象にコメントビューを指定できません。<br>
-		 * コメントビューを使用したデータバインドは、コントローラが持つViewイ���スタンス(<a href="Controller.html#view">Controller.view</a>)から実行して下さい。
+		 * コメントビューを使用したデータバインドは、コントローラが持つViewインスタンス(<a href="Controller.html#view">Controller.view</a>)から実行して下さい。
 		 *
 		 * @since 1.1.0
 		 * @param {String|Element|Element[]|jQuery} element コメントビュー疑似セレクタ、またはDOM要素(セレクタ文字列, DOM要素,
@@ -6946,7 +6970,7 @@ var contextUid=0; /** viewUidカウンタ */var viewUid=0; /** bindUidカウン�
 //  ビュー -> ソースはbindingインスタンス単位ではなく、グローバルに管理（ビュー自体が実質シングルトンなので）。
 //(3)loop-contextの各要素と対応する（要素ごとの）ビュー：
 //  binding._loopElementsMap[viewUid] = loopElementsArray;
-//  loopElementsArrayのi番目にはビューのノードの配列が入っていて、ソース配列のi番目と対応。
+//  loopElementsArrayのi番目にはビューのノードの配列が入っていて���ソース配列のi番目と対応。
 /**
 	 * ビュー（viewUid） -> ソースオブジェクト のマップ。many:1。キーはviewUid、値はソースオブジェクト。
 	 */var viewToSrcMap={}; // =============================
@@ -6990,7 +7014,7 @@ var contextElem=$(candidateContextElems[j])[0];var contextParent=contextElem.par
 if(obj&&obj.addEventListener&&obj.getModel&&!isArray(obj)&&!h5.core.data.isObservableArray(obj)||h5.core.data.isObservableItem(obj)){return true;}return false;}function addViewUid(rootNodes,viewUid){for(var i=0,len=rootNodes.length;i<len;i++){var n=rootNodes[i];if(n.nodeType===NODE_TYPE_ELEMENT){setElemAttribute(n,DATA_H5_DYN_VID,viewUid);}}} /**
 	 * data-loop-contextによるループバインドを行う。（applyBindingの中からのみ呼ばれる）
 	 *
-	 * @param {Binding} binding バインディングインスタンス
+	 * @param {Binding} binding バインデ���ングインスタンス
 	 * @param {Node|Node[]} rootNodes
 	 *            データコンテキストを持つルートノード、またはルートノードの配列（テキストノードやコメントノードなどELEMENT以外が含まれる場合も有る）
 	 * @param {Object} context データコンテキスト
@@ -7102,7 +7126,7 @@ Array.prototype.splice.apply(loopNodes,spliceArgs);} /**
 for(var i=0,len=loopNodes.length;i<len;i++){removeDomNodes(binding,loopRootNode,loopNodes[i]);} //TODO addLoopChildrenとコード共通化
 //追加される全てのノードを持つフラグメント。
 //Element.insertBeforeでフラグメントを挿入対象にすると、フラグメントに入っているノードの順序を保って
-//指定した要���の前に挿入できる。従って、unshift()の際insertBeforeを一度呼ぶだけで済む。
+//指定した要素の前に挿入できる。従って、unshift()の際insertBeforeを一度呼ぶだけで済む。
 var fragment=loopRootNode.ownerDocument.createDocumentFragment();var newLoopNodes=[];for(var i=0,srcLen=srcArray.length;i<srcLen;i++){var newChildNodes=cloneChildNodes(srcCtxNode);newLoopNodes[i]=newChildNodes;for(var j=0,newChildNodesLen=newChildNodes.length;j<newChildNodesLen;j++){fragment.appendChild(newChildNodes[j]);}applyBinding(binding,newChildNodes,srcArray.get(i));}loopRootNode.appendChild(fragment);return newLoopNodes;} // =========================================================================
 //
 // Body
@@ -7195,7 +7219,7 @@ applyBinding(this,this._targets,this._rootContext,false,true);}$.extend(Binding.
 		 * @since 1.1.0
 		 * @memberOf Binding
 		 * @function
-		 */unbind:function unbind(){ //全てのバインディングを解除
+		 */unbind:function unbind(){ //全てのバ���ンディングを解除
 for(var i=0,len=this._targets.length;i<len;i++){var target=this._targets[i];if(target.nodeType===NODE_TYPE_ELEMENT){ //バインディングを解除
 this._removeBinding(target); //dyn属性削除
 removeElemAttribute(target,DATA_H5_DYN_BIND_ROOT);var cnElems=queryQualifiedElements(target,DATA_H5_DYN_CN,undefined,true);for(var j=0,cnLen=cnElems.length;j<cnLen;j++){removeElemAttribute(cnElems[j],DATA_H5_DYN_CN);}var cxElems=queryQualifiedElements(target,DATA_H5_DYN_CTX,undefined,true);for(var j=0,cxLen=cxElems.length;j<cxLen;j++){removeElemAttribute(cxElems[j],DATA_H5_DYN_CTX);}}} //ビューとこのBindingインスタンスのマップを削除
@@ -7426,7 +7450,7 @@ return val==null||isStrictNaN(val)||typeof val==='number'||!isStrict&&(val insta
 // 文字列の場合は、[±数字]で構成されている文字列ならOKにする
 // ※ parseIntよりも厳しいチェックにしている。"12px"、"12.3"、[12,3] はいずれもparseIntできるが、ここではNG。
 return val==null||typeof val==='number'&&parseInt(val)===val||!isStrict&&(val instanceof Number&&parseInt(val)===parseFloat(val)||(typeof val==='string'||val instanceof String)&&!!val.match(/^[+\-]{0,1}[0-9]+$/));} /**
-	 * type:'string' 指定のプロパティに代入できるかのチェック
+	 * type:'string' 指定のプロパティに代入でき���かのチェック
 	 *
 	 * @private
 	 * @param {Any} val 判定する値
@@ -7437,7 +7461,7 @@ return val==null||typeof val==='number'&&parseInt(val)===val||!isStrict&&(val in
 	 *
 	 * @private
 	 * @param {Any} val 判定する値
-	 * @param {Boolean} isStrict 厳密に判���するかどうか。isStrict === trueなら型変換可能でも型が違えばfalseを返す
+	 * @param {Boolean} isStrict 厳密に判定するかどうか。isStrict === trueなら型変換可能でも型が違えばfalseを返す
 	 * @returns {boolean} type:'boolean'指定のプロパティに代入可能か
 	 */function isBooleanValue(val,isStrict){return val==null||typeof val==='boolean'||!isStrict&&val instanceof Boolean;} /**
 	 * ValidationResultにデフォルトで登録するvalidateイベントリスナ
@@ -7776,7 +7800,7 @@ return value!=null&&value!=='';}, /**
 		 */future:function future(value){return value==null||value instanceof Date&&new Date().getTime()<value.getTime();}, /**
 		 * 値が現在時刻より過去かどうか判定し、判定結果をtrueまたはfalseで返します
 		 * <p>
-		 * 値がnullまたはundefinedの場合はtrue���返します。
+		 * 値がnullまたはundefinedの場合はtrueを返します。
 		 * </p>
 		 * <p>
 		 * 値がDate型でない場合はfalseを返します。
@@ -8155,7 +8179,7 @@ defineRule(DEFAULT_RULE_NAME_REQUIRED,rule.required,null,51);defineRule(DEFAULT_
 	 */var CLASS_SKIN='skin'; /**
 	 * 一番外側にあるVML要素のクラス名
 	 */var CLASS_VML_ROOT='vml-root'; /**
-	 * VMLのスタイル定義要素(style要素)のid
+	 * VMLのスタ���ル定義要素(style要素)のid
 	 */var ID_VML_STYLE='h5-vmlstyle'; /**
 	 * メッセージに要素に表示する文字列のフォーマット
 	 */var FORMAT_THROBBER_MESSAGE_AREA='<span class="'+CLASS_INDICATOR_THROBBER+'"></span><span class="'+CLASS_INDICATOR_MESSAGE+'" {0}>{1}</span>'; /**
@@ -8165,7 +8189,7 @@ defineRule(DEFAULT_RULE_NAME_REQUIRED,rule.required,null,51);defineRule(DEFAULT_
 	 */var DATA_KEY_POSITION='before-position'; /**
 	 * jQuery.data()で使用するキー名
 	 * <p>
-	 * インジケータ���示前のスタイル、zoomプロパティの値を保持するために使用する
+	 * インジケータ表示前のスタイル、zoomプロパティの値を保持するために使用する
 	 */var DATA_KEY_ZOOM='before-zoom'; /**
 	 * scrollToTop() リトライまでの待機時間
 	 */var WAIT_MILLIS=500; /**
@@ -8267,7 +8291,7 @@ for(var i=0;i<len;i++){if(prefixes[i]+propCamel in div.style){return true;}}retu
 	 */function calculateLineCoords(size,line){var positions=[];var centerPos=size/2;var radius=size*0.8/2;var eachRadian=360/line*Math.PI/180;for(var j=1;j<=line;j++){var rad=eachRadian*j;var cosRad=Math.cos(rad),sinRad=Math.sin(rad);positions.push({from:{x:centerPos+radius/2*cosRad,y:centerPos+radius/2*sinRad},to:{x:centerPos+radius*cosRad,y:centerPos+radius*sinRad}});}return positions;} /**
 	 * 任意要素のスクロールサイズ(scrollWidth/Height：見た目でなくコンテンツ全体のサイズ)を取得します。
 	 * IE6は内包する要素の方が小さい場合にscrollサイズがclientサイズより小さくなってしまうバグがあります（本来はscroll===client）。
-	 * そこで、IE6の場合はscrollとclientのうち大きい方のサイズを返します。<br>
+	 * そこで、IE6の場���はscrollとclientのうち大きい方のサイズを返します。<br>
 	 * また、scrollW/Hは整数を返しますが、内部的にはサイズが小数になっている場合があります。Chrome22, Firefox20,
 	 * Opera12ではscrollサイズをセットしても問題ありませんが、IEの場合
 	 * (内部サイズが小数のときに)scrollW/Hの大きさでオーバーレイのサイズを設定すると意図しないスクロールバーが出てしまう場合があります。
@@ -8352,7 +8376,7 @@ var vmlStyle=doc.createElement('style');doc.getElementsByTagName('head')[0].appe
 	 */function getComputedStyleObject(elem){return getWindowOf(elem).getComputedStyle(elem,null);} /**
 	 * スタイルを取得する
 	 * <p>
-	 * IEでjQuery1.8.X～1.10.Xを使用した時、ポップアップウィンドウ内の要素についてスタイルを取得しようとするとエラーになるため、ラ���プしている。
+	 * IEでjQuery1.8.X～1.10.Xを使用した時、ポップアップウィンドウ内の要素についてスタイルを取得しようとするとエラーになるため、ラップしている。
 	 * </p>
 	 * <p>
 	 * getComputedStyleがないブラウザについては、jQuery.css()を使って取得した値を返す。
@@ -8454,7 +8478,7 @@ $elem.each(function(i){for(var p in props[i]){this.style[p]='';}});callback();re
 	 */function fadeIn($elem,time,callback){ // 現在のopacityを取得
 var opacities=[];$elem.each(function(){var opacity=parseFloat(getComputedStyleValue(this,'opacity'));opacities.push({opacity:opacity});}); // opacityを0にして、display:blockにする
 $elem.css({opacity:0,display:'block'});animate(opacities,$elem,time,callback);} /**
-	 * opacityを現在の値から、0までアニメーションします
+	 * opacityを現在の値から、0まで���ニメーションします
 	 *
 	 * @param {jQuery} $elem fadeOutさせる要素
 	 * @param {Number} time アニメーションに掛ける時間(ms)
@@ -8504,12 +8528,12 @@ this._runId=setTimeout(function(){that._run.call(that);},perMills);}},setPercent
 	 * @param {Number} [option.percent] スロバーの中央に表示する数値。0～100で指定する (デフォルト:未指定)
 	 * @param {Boolean} [option.block] 画面を操作できないようオーバーレイ表示するか (true:する/false:しない) (デフォルト:true)
 	 * @param {Number} [option.fadeIn] インジケータをフェードで表示する場合、表示までの時間をミリ秒(ms)で指定する (デフォルト:フェードしない)
-	 * @param {Number} [option.fadeOut] インジケータをフェードで非表示にする場合、非表示までの時間をミリ秒(ms)で指定する (デフォルト:しない)
+	 * @param {Number} [option.fadeOut] インジケータをフェードで非表示にする場合、非表示までの時間をミリ���(ms)で指定する (デフォルト:しない)
 	 * @param {Promise|Promise[]} [option.promises] Promiseオブジェクト (Promiseの状態に合わせて自動でインジケータの非表示を行う)
 	 * @param {String} [option.theme] テーマクラス名 (インジケータのにスタイル定義の基点となるクラス名 (デフォルト:'a')
 	 * @param {String} [option.throbber.lines] スロバーの線の本数 (デフォルト:12)
 	 * @param {String} [option.throbber.roundTime] スロバーの白線が1周するまでの時間(ms)
-	 *            (このオプション���CSS3Animationを未サポートブラウザのみ有効) (デフォルト:1000)
+	 *            (このオプションはCSS3Animationを未サポートブラウザのみ有効) (デフォルト:1000)
 	 */function Indicator(target,option){var that=this;var $t=$(target); // ターゲットが存在しない場合は何もしない
 if(!$t.length){return;} // スクリーンロックで表示するか判定
 // (自分のwindowのみで、ポップアップウィンドウの場合はスクリーンロックと判定しない)
@@ -8755,7 +8779,7 @@ return new Indicator(param,option);}; /**
 	 * @function
 	 * @memberOf h5.ui
 	 */var isInView=function isInView(element,container){var viewTop,viewBottom,viewLeft,viewRight;var $element=$(element);var height,width; // containerの位置を取得。borderの内側の位置で判定する。
-if((typeof container==='undefined'?'undefined':_typeof(container))===TYPE_OF_UNDEFINED){ // containerが指定されていないときは、画面表示範囲内にあるかどうか判���する
+if((typeof container==='undefined'?'undefined':_typeof(container))===TYPE_OF_UNDEFINED){ // containerが指定されていないときは、画面表示範囲内にあるかどうか判定する
 height=getDisplayArea('Height');width=getDisplayArea('Width');viewTop=scrollTop();viewLeft=scrollLeft();}else {var $container=$(container);if($container.find($element).length===0){ // elementとcontaienrが親子関係でなければundefinedを返す
 return undefined;}var containerOffset=getOffset($container);viewTop=containerOffset.top+parseInt($container.css('border-top-width'));viewLeft=containerOffset.left+parseInt($container.css('border-left-width'));height=$container.innerHeight();width=$container.innerWidth();}viewBottom=viewTop+height;viewRight=viewLeft+width; // elementの位置を取得。borderの外側の位置で判定する。
 var elementOffset=getOffset($element);var positionTop=elementOffset.top;var positionLeft=elementOffset.left;var positionBottom=positionTop+$element.outerHeight();var positionRight=positionLeft+$element.outerWidth();return (viewTop<=positionTop&&positionTop<viewBottom||viewTop<positionBottom&&positionBottom<=viewBottom)&&(viewLeft<=positionLeft&&positionLeft<viewRight||viewLeft<positionRight&&positionRight<=viewRight);}; /**
@@ -8961,7 +8985,7 @@ $(context.event.target).trigger(EV_NAME_H5_JQM_PAGE_HIDE,{nextPage:$.mobile.acti
 		 * @memberOf JQMController
 		 */'{rootElement} pagehide':function rootElementPagehide(context){if(!hideEventFired){$(context.event.target).trigger(EV_NAME_H5_JQM_PAGE_HIDE,{nextPage:context.evArg.nextPage});}hideEventFired=false;var id=context.event.target.id;changeListenerState(id,false);this.removeCSS(id);}, /**
 		 * コントローラでもページ表示時のイベントを拾えるようにするため、 JQMのpageshowイベントと同じタイミングで、JQMマネージャが管理しているコントローラのルート要素に対して
-		 * h5jqmpageshowイベントをトリガします
+		 * h5jqmpageshowイベントをトリガし���す
 		 *
 		 * @param {Object} context コンテキスト
 		 * @memberOf JQMController
@@ -9044,7 +9068,7 @@ shouldHandlePagecreateEvent=compareVersion($.mobile.version,'1.4')>=0; // 初期
 $(document).one('pageshow',function(){showEventFiredBeforeReady=true;});$(function(){jqmControllerInstance=h5internal.core.controllerInternal('body',jqmController,null,{managed:false});bindToActivePage();});}, /**
 				 * jQuery Mobile用hifiveコントローラマネージャにコントローラを登録します。
 				 * <p>
-				 * 「data-role="page"」または「data-role="dialog"」の属性が指定された要素でかつ、
+				 * 「data-role="page"」ま���は「data-role="dialog"」の属性が指定された要素でかつ、
 				 * idが第1引数で指定されたものに一致する要素に対してコントローラを登録します。
 				 * <p>
 				 * 1つのページに複数コントローラを登録することもできます。<br>
@@ -9390,7 +9414,7 @@ for(var name in this._styleAppliedElements){var element=this._styleAppliedElemen
 		 * @param validationResult
 		 */_setStyle:function _setStyle(element,name,validationResult){ // 共通設定とプロパティ毎の設定をマージ
 var propSetting=$.extend({},this._setting,this._setting.property&&this._setting.property[name]);if(propSetting.off){ // off指定されていれば何もしない
-return;}var replaceElement=propSetting.replaceElement;var element=isFunction(replaceElement)?replaceElement(element):replaceElement||element;if(!element){return;}if($.inArray(name,validationResult.validatingProperties)!==-1){ // まだvalidate結果が返ってきていな���場合
+return;}var replaceElement=propSetting.replaceElement;var element=isFunction(replaceElement)?replaceElement(element):replaceElement||element;if(!element){return;}if($.inArray(name,validationResult.validatingProperties)!==-1){ // まだvalidate結果が返ってきていない場合
 this._setValidateState(STATE_VALIDATING,element,propSetting);validationResult.addEventListener('validate',this.own(function(ev){if(ev.name===name){this._setValidateState(ev.isValid?STATE_SUCCESS:STATE_ERROR,element,propSetting,name);}}));return;} // invalidPropertiesに入っていればエラー扱い、そうでない場合は成功扱い
 // (そもそもルールの指定が無くvalidation対象じゃない(propertiesに入っていない)場合は成功扱い)
 this._setValidateState($.inArray(name,validationResult.invalidProperties)===-1?STATE_SUCCESS:STATE_ERROR,element,propSetting,name);}, /**
@@ -9554,7 +9578,7 @@ this.initPromise.done(this.own(this._setChildSetting));}}, /**
 		 * @param name
 		 * @param {ValidationResult} validationResult
 		 */_onKeyup:function _onKeyup(element,name,validationResult){this._setErrorBalloon(element,name,validationResult,'keyup');}, /**
-		 * プラ���インのリセット
+		 * プラグインのリセット
 		 * <p>
 		 * 表示されているバルーンを削除します
 		 * </p>
@@ -10059,7 +10083,7 @@ this._addRuleCreator(DATA_RULE_REQUIRED,defaultRuleCreators.requiredRuleCreator)
 		 * @private
 		 */__init:function __init(){ // form要素にバインドされていればそのformに属しているform関連要素を見る
 // すなわち、ルートエレメント以下にあるinputでもform属性で別IDが指定されていたらそのinputは対象外
-// また、ルートエレメント外にあるinputでも、form属性がルートエレメントのformを指定していれ���対象とする
+// また、ルートエレメント外にあるinputでも、form属性がルートエレメントのformを指定していれば対象とする
 if(this.rootElement.tagName.toUpperCase()==='FORM'){this._bindedForm=this.rootElement; // HTML5のformによる標準のバリデーションは行わないようにする
 $(this._bindedForm).prop('novalidate',true);} // フォーム部品からルールを生成
 var $formControls=$(this._getElements());var validateRule={};$formControls.each(this.ownWithOrg(function(element){var name=element.getAttribute('name'); // 名前なしは何もしない
@@ -10189,11 +10213,11 @@ if(!this.isInit){this.initPromise.done(this.own(function(){this.addOutput(plugin
 		 * @memberOf h5.ui.FormController
 		 * @param {string|string[]} names 指定した場合、指定したnameのものだけを集約
 		 * @returns {Object} フォーム部品集約オブジェクト
-		 */getValue:function getValue(names){names=names&&(!isArray(names)?[names]:names);var $elements=$(this._getElements());var $groups=$(this._getInputGroupElements());var propertySetting=this._setting&&this._setting.property||{};var ret={};var elementNames=[];var rootElement=this.rootElement;$elements.each(function(){var name=this.name;elementNames.push(name);var currentGroup=ret; // グループに属していればグループ名を取得
+		 */getValue:function getValue(names){names=names&&(!isArray(names)?[names]:names);var $elements=$(this._getElements());var $groups=$(this._getInputGroupElements());var propertySetting=this._setting&&this._setting.property||{};var ret={};var elementNames=[];var rootElement=this.rootElement;$elements.each(function(){var name=this.name;elementNames.push(name);var currentGroup=ret; // グループに属していればグループ���を取得
 if($groups.find(this).length){var $group=$(this).closest('[data-'+DATA_INPUTGROUP_CONTAINER+']');var groupName=$group.data(DATA_INPUTGROUP_CONTAINER);}if(groupName){elementNames.push(groupName); // グループコンテナに属するエレメントの場合
 if(names&&$.inArray(name,names)===-1&&$.inArray(groupName,names)===-1){ // nameもgroupNameもnamesに入っていなければ集約対象外
 return;} // グループ単位でオブジェクトを作る
-ret[groupName]=ret[groupName]||{};currentGroup=ret[groupName];}else if(names&&$.inArray(name,names)===-1){ // グループに���さないエレメントの場合
+ret[groupName]=ret[groupName]||{};currentGroup=ret[groupName];}else if(names&&$.inArray(name,names)===-1){ // グループに属さないエレメントの場合
 // namesに含まれないnameのエレメントは集約対象外
 return;}if(this.type==='file'){ // ファイルオブジェクトを覚えておく
 var files=this.files;var filesLength=files.length;if(!filesLength){return;}currentGroup[name]=currentGroup[name]||[];for(var i=0;i<filesLength;i++){currentGroup[name].push(files[i]);}return;}if(!name||(this.type==='radio'||this.type==='checkbox')&&this.checked===false){return;}var valueFunc=propertySetting[name]&&propertySetting[name].valueFunc;var value=valueFunc?valueFunc(rootElement,name):$(this).val();if(valueFunc&&value===undefined||value==null){ // valueFuncがundefinedを返した場合またはvalueがnullだった場合はそのプロパティは含めない
@@ -10388,7 +10412,7 @@ var geo=null;function getGeo(){if(!geo){geo=navigator.geolocation;}return geo;}v
 /**
 	 * h5.api.geo.getDistance() の計算モードを指定するための定数クラス
 	 * <p>
-	 * このオブジェクトは自分でnewすることは���りません。以下のオブジェクトにアクセスするとインスタンスが返されます。
+	 * このオブジェクトは自分でnewすることはありません。以下のオブジェクトにアクセスするとインスタンスが返されます。
 	 * </p>
 	 * <ul>
 	 * <li>h5.api.geo.GS_GRS80</li>
@@ -10586,7 +10610,7 @@ switch(e.code){case e.DATABASE_ERR:msg=SQL_ERR_DATABASE;break;case e.CONSTRAINT_
 	 * txeがTransactionalExecutor型ではない場合、例外をスローします。<br>
 	 * null,undefinedの場合は例外をスローしません。
 	 */function isTransactionalExecutor(funcName,txe){if(txe!=undefined&&!(txe instanceof TransactionalExecutor)){throwFwError(ERR_CODE_INVALID_TRANSACTION_TYPE,funcName);}} /**
-	 * 条件を保持するオブジェクトから、SQLのプレースホルダを含むWHERE文とパラメータの配列を生成します
+	 * 条件を保持するオブジェクトから、SQLのプレース���ルダを含むWHERE文とパラメータの配列を生成します
 	 */function setConditionAndParameters(whereObj,conditions,parameters){if($.isPlainObject(whereObj)){for(var prop in whereObj){var params=$.trim(prop).replace(/ +/g,' ').split(' ');var param=[];if(params[0]===""){throwFwError(ERR_CODE_INVALID_COLUMN_NAME_IN_WHERE);}else if(params.length===1){param.push(params[0]);param.push('=');param.push('?');}else if(!/^(<=|<|>=|>|=|!=|like)$/i.test(params[1])){throwFwError(ERR_CODE_INVALID_OPERATOR);}else if(params.length===3&&/^like$/i.test(params[1])){param.push(params[0]);param.push(params[1]);param.push('?');param.push('ESCAPE');param.push('\"'+params[2]+'\"');}else {param.push(params[0]);param.push(params[1]);param.push('?');}conditions.push(param.join(' '));parameters.push(whereObj[prop]);}}} /**
 	 * Web SQL Databaseクラス
 	 *
@@ -11237,7 +11261,7 @@ function WebStorage(storage){ /**
 	 * @name storage
 	 * @namespace
 	 */$.extend(WebStorage.prototype,{ /**
-		 * ス���レージに保存されている、キーと値のペアの数を取得します。
+		 * ストレージに保存されている、キーと値のペアの数を取得します。
 		 *
 		 * @memberOf h5.api.storage.local
 		 * @name getLength
@@ -11377,7 +11401,7 @@ isSupported:window.localStorage?function(){try{var checkKey='__H5_WEB_STORAGE_CH
 	 */var NOT_RESHOWABLE_MESSAGE='この画面は再表示できません。'; /**
 	 * メインシーンコンテナのURL履歴保持方法列挙体
 	 * <p>
-	 * メインシーンコンテナURL履歴保持方法です。何れかをh5.settings.scene.urlHistoryModeに指定します。
+	 * メインシーンコンテナURL履歴保持方法です。何れかをh5.settings.scene.urlHistoryMode���指定します。
 	 * </p>
 	 * <dl>
 	 * <dt>h5.scene.urlHistoryMode.HASH</dt>
@@ -11387,7 +11411,7 @@ isSupported:window.localStorage?function(){try{var checkKey='__H5_WEB_STORAGE_CH
 	 * <dt>h5.scene.urlHistoryMode.FULLRELOAD</dt>
 	 * <dd>"fullreload" … Ajaxを使用せず、ページ全体を再読み込みする(通常の遷移)。</dd>
 	 * <dt>h5.scene.urlHistoryMode.HISTORY</dt>
-	 * <dd>"history"(デフォルト) … HTML5 History APIを使用してURLを変更する。History APIが使用できな���場合はハッシュを使用する。</dd>
+	 * <dd>"history"(デフォルト) … HTML5 History APIを使用してURLを変更する。History APIが使用できない場合はハッシュを使用する。</dd>
 	 * <dt>h5.scene.urlHistoryMode.HISTORY_OR_HASH</dt>
 	 * <dd>"historyOrHash" … "history"と同義。</dd>
 	 * <dt>h5.scene.urlHistoryMode.HISTORY_OR_ERROR</dt>
@@ -11460,7 +11484,7 @@ var isDisposing=h5internal.core.isDisposing; // ================================
 // Functions
 // =============================
 /**
-	 * デフォルトシーンのシーンコントローラを取得する。
+	 * デフォルト���ーンのシーンコントローラを取得する。
 	 *
 	 * @private
 	 * @returns controller
@@ -11737,7 +11761,7 @@ if(option.routes){self._routes=self._routes.concat(option.routes);}return self;}
 		 * @private
 		 * @memberOf Router
 		 */urlHistoryActualMode:null, /**
-		 * URL変更なしでの対応関数実行 URL文字列保持用
+		 * URL変更なしでの対応関数実行 URL文字列保���用
 		 *
 		 * @private
 		 * @memberOf Router
@@ -11962,7 +11986,7 @@ setTimeout(function(){dfd.resolve(remote);},100);return dfd.promise();} // TODO(
 	 * @param html
 	 * @returns {String}
 	 */function extractBody(html){ // TODO(鈴木) この場合HTMLコメントは消える。HTMLコメント内にbodyタグがない前提であれば楽だが。。
-// HTMLコメントも保存するよう実装すべきか？
+// HTMLコメントも保存するよう実装すべき���？
 var match=html.replace(htmlCommentRegexp,'').match(bodyTagRegExp);if(match){return '<div '+DATA_H5_DYN_DUMMY_BODY+' '+match[1]+'>'+match[2]+'</div>';}return html;} /**
 	 * 直下先頭要素に'data-h5-default-scene'もしくは'data-h5-scene'属性がない場合は、'data-h5-default-scene'のDIV要素で囲む。
 	 * <p>
@@ -12051,7 +12075,7 @@ delete param.to;to=clearParam(to);var urlHelper=new UrlHelper(to);path=urlHelper
 	 */var mainContainer=null; /**
 	 * 再表示不可画面用コントローラー
 	 * <p>
-	 * シーン遷移時シーン間パラメーターをURLに保持しない場合で、ブラウザ履歴等により再表示した場合に表示する画面。
+	 * シーン遷移時シーン間パラメーターをURLに保持しない場合で、ブラウザ履歴等により再表示した場合に表示す���画面。
 	 * </p>
 	 *
 	 * @private
@@ -22363,7 +22387,8 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
   var STATUS = {
     OK: 'OK',
     ERROR: 'ERROR',
-    CABOOM: 'CABOOM'
+    CABOOM: 'CABOOM',
+    CLEARED: 'CLEARED'
   };
 
   // private property
@@ -22420,6 +22445,7 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
 
       getPrivates(this).mineState = this.createMineField(rowNum, colNum, mineNum);
       getPrivates(this).isCaboomed = false;
+      getPrivates(this).isCleared = false;
     }
 
     _createClass(MineSweeper, [{
@@ -22486,6 +22512,13 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
     }, {
       key: 'open',
       value: function open(row, col) {
+        if (getPrivates(this).isCleared) {
+          return {
+            status: STATUS.ERROR,
+            message: 'already cleared',
+            field: this.getAllField()
+          };
+        }
         if (getPrivates(this).isCaboomed) {
           return {
             status: STATUS.ERROR,
@@ -22525,8 +22558,12 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
               }
             }
           }
+          var status = this.getRemainingCellNum() === this.mineNum ? STATUS.CLEARED : STATUS.OK;
+          if (status === STATUS.CLEARED) {
+            getPrivates(this).isCleared = true;
+          }
           return {
-            status: STATUS.OK,
+            status: status,
             field: this.getField()
           };
         }
@@ -22567,6 +22604,17 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
       key: 'getAllField',
       value: function getAllField() {
         return getPrivates(this).mineState;
+      }
+    }, {
+      key: 'getRemainingCellNum',
+      value: function getRemainingCellNum() {
+        var result = 0;
+        for (var i = 0; i < this.rowNum; i++) {
+          for (var j = 0; j < this.colNum; j++) {
+            result += !this.openState[i][j];
+          }
+        }
+        return result;
       }
     }]);
 
