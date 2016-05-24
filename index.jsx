@@ -5,6 +5,16 @@ require('h5');
   const MineSweeper = require('minesweeper-engine');
   const React = require('react');
   const ReactDOM = require('react-dom');
+  const Timer = require('countup-timer');
+  const timer = new Timer();
+  const TimeFormatUtil = require('./formatter');
+
+  const STATUS = {
+    READY: 'READY',
+    PLAYING: 'PLAYING',
+    CLEARED: 'CLEARED',
+    CABOOM: 'CABOOM'
+  };
 
   const Field = (props) => {
     return <table className="field" data-mine-status={props.status}>
@@ -38,7 +48,9 @@ require('h5');
     data-mine-row={cell.row}
     data-mine-num={cell.nabors}
     data-mine-flag={cell.flag}>
-    {mineNumber(cell)}
+    <div>
+      {mineNumber(cell)}
+    </div>
     </td>
   };
 
@@ -49,7 +61,7 @@ require('h5');
     if(cell.nabors == 0 || cell.isOpened === false){
       return '　';
     } else {
-      return cell.nabors === -1 ? '!' : cell.nabors
+      return cell.nabors === -1 ? "\ud83d\udca3" : cell.nabors
     }
   };
 
@@ -137,8 +149,7 @@ require('h5');
   const mineSweeperController = {
     __name: 'minesweeper.mineSweeperController',
     _mineSweeperLogic: mineSweeperLogic,
-    _isCaboom: false,
-    _isCleared: false,
+    _status: null,
 
     _render: function(data){
       ReactDOM.render(
@@ -149,16 +160,21 @@ require('h5');
 
     __ready: function(){
       this._render(this._mineSweeperLogic.getField());
+      this._status = STATUS.READY;
     },
 
     _reset: function(){
-      this._isCaboom = false;
-      this._isCleared = false;
       this._render(this._mineSweeperLogic.getNewField());
+      timer.reset();
+      this._status = STATUS.READY;
     },
 
     '.cell click': function(context, $el) {
-      if(this._isCaboom || this._isCleared){
+      if(this._status === STATUS.READY){
+        timer.start();
+        this._status = STATUS.PLAYING;
+      }
+      if([STATUS.CABOOM, STATUS.CLEARED].indexOf(this._status) !== -1){
         this._reset();
       } else if($el.attr('data-mine-flag') === 'true'){
         return;
@@ -170,9 +186,13 @@ require('h5');
         if(result.status === 'ERROR'){
           this.log.error(result.message);
           return;
+        } else if(result.status === 'CLEARED'){
+          this._status = STATUS.CLEARED;
+          timer.stop();
+        } else if(result.status === 'CABOOM'){
+          this._status = STATUS.CABOOM;
+          timer.stop();
         }
-        this._isCleared = result.status === 'CLEARED';
-        this._isCaboom = result.status === 'CABOOM';
         this._render(result);
       }
     },
@@ -193,4 +213,43 @@ require('h5');
   jQuery(function() {
     h5.core.controller('#mineSweeperContainer', mineSweeperController)
   });
+
+  const TimerCount = props => {
+    return <div className="timer">
+      {TimeFormatUtil.formatTimeString(props.milliseconds)}
+      {TimeFormatUtil.formatMsecString(props.milliseconds)}
+  </div>
+  };
+
+  const timerController = {
+    __name: 'minesweeper.TimerController',
+    _render: function(data){
+      ReactDOM.render(
+        <TimerCount milliseconds={data.milliseconds}/>,
+          this.rootElement
+      );
+    },
+
+    __ready: function(){
+      const timerDom = document.createElement('div');
+      timerDom.setAttribute('class', 'timer');
+      this.rootElement.appendChild(timerDom)
+      this._render({milliseconds: 0});
+
+      timer.on('start', data => {
+        this._render(data);
+      });
+      timer.on('reset', data => {
+        this._render(data);
+      });
+      timer.on('frame', data => {
+        this._render(data);
+      });
+    }
+  }
+
+  jQuery(function() {
+    h5.core.controller('.timerContainer', timerController)
+  });
+
 })();
