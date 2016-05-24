@@ -1,6 +1,28 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
 'use strict';
 
+function getMilliSeconds(time) {
+  return ('00' + time % 1000).slice(-3);
+}
+function getSeconds(time) {
+  return ('0' + Math.floor(time / 1000) % 60).slice(-2);
+}
+function getMinutes(time) {
+  return ('0' + Math.floor(time / 1000 / 60)).slice(-2);
+}
+function formatTimeString(time) {
+  return getMinutes(time) + ':' + getSeconds(time);
+}
+function formatMsecString(time) {
+  return '.' + getMilliSeconds(time);
+}
+
+exports.formatTimeString = formatTimeString;
+exports.formatMsecString = formatMsecString;
+
+},{}],2:[function(require,module,exports){
+'use strict';
+
 require('h5');
 
 (function () {
@@ -9,6 +31,16 @@ require('h5');
   var MineSweeper = require('minesweeper-engine');
   var React = require('react');
   var ReactDOM = require('react-dom');
+  var Timer = require('countup-timer');
+  var timer = new Timer();
+  var TimeFormatUtil = require('./formatter');
+
+  var STATUS = {
+    READY: 'READY',
+    PLAYING: 'PLAYING',
+    CLEARED: 'CLEARED',
+    CABOOM: 'CABOOM'
+  };
 
   var Field = function Field(props) {
     return React.createElement(
@@ -49,7 +81,11 @@ require('h5');
         'data-mine-row': cell.row,
         'data-mine-num': cell.nabors,
         'data-mine-flag': cell.flag },
-      mineNumber(cell)
+      React.createElement(
+        'div',
+        null,
+        mineNumber(cell)
+      )
     );
   };
 
@@ -60,7 +96,7 @@ require('h5');
     if (cell.nabors == 0 || cell.isOpened === false) {
       return '　';
     } else {
-      return cell.nabors === -1 ? '!' : cell.nabors;
+      return cell.nabors === -1 ? '💣' : cell.nabors;
     }
   };
 
@@ -147,8 +183,7 @@ require('h5');
   var mineSweeperController = {
     __name: 'minesweeper.mineSweeperController',
     _mineSweeperLogic: mineSweeperLogic,
-    _isCaboom: false,
-    _isCleared: false,
+    _status: null,
 
     _render: function _render(data) {
       ReactDOM.render(React.createElement(Field, { status: data.status, field: data.field, flagsField: data.flags }), this.$find('.fieldContainer').get(0));
@@ -156,16 +191,21 @@ require('h5');
 
     __ready: function __ready() {
       this._render(this._mineSweeperLogic.getField());
+      this._status = STATUS.READY;
     },
 
     _reset: function _reset() {
-      this._isCaboom = false;
-      this._isCleared = false;
       this._render(this._mineSweeperLogic.getNewField());
+      timer.reset();
+      this._status = STATUS.READY;
     },
 
     '.cell click': function cellClick(context, $el) {
-      if (this._isCaboom || this._isCleared) {
+      if (this._status === STATUS.READY) {
+        timer.start();
+        this._status = STATUS.PLAYING;
+      }
+      if ([STATUS.CABOOM, STATUS.CLEARED].indexOf(this._status) !== -1) {
         this._reset();
       } else if ($el.attr('data-mine-flag') === 'true') {
         return;
@@ -177,9 +217,13 @@ require('h5');
         if (result.status === 'ERROR') {
           this.log.error(result.message);
           return;
+        } else if (result.status === 'CLEARED') {
+          this._status = STATUS.CLEARED;
+          timer.stop();
+        } else if (result.status === 'CABOOM') {
+          this._status = STATUS.CABOOM;
+          timer.stop();
         }
-        this._isCleared = result.status === 'CLEARED';
-        this._isCaboom = result.status === 'CABOOM';
         this._render(result);
       }
     },
@@ -200,9 +244,48 @@ require('h5');
   jQuery(function () {
     h5.core.controller('#mineSweeperContainer', mineSweeperController);
   });
+
+  var TimerCount = function TimerCount(props) {
+    return React.createElement(
+      'div',
+      { className: 'timer' },
+      TimeFormatUtil.formatTimeString(props.milliseconds),
+      TimeFormatUtil.formatMsecString(props.milliseconds)
+    );
+  };
+
+  var timerController = {
+    __name: 'minesweeper.TimerController',
+    _render: function _render(data) {
+      ReactDOM.render(React.createElement(TimerCount, { milliseconds: data.milliseconds }), this.rootElement);
+    },
+
+    __ready: function __ready() {
+      var _this = this;
+
+      var timerDom = document.createElement('div');
+      timerDom.setAttribute('class', 'timer');
+      this.rootElement.appendChild(timerDom);
+      this._render({ milliseconds: 0 });
+
+      timer.on('start', function (data) {
+        _this._render(data);
+      });
+      timer.on('reset', function (data) {
+        _this._render(data);
+      });
+      timer.on('frame', function (data) {
+        _this._render(data);
+      });
+    }
+  };
+
+  jQuery(function () {
+    h5.core.controller('.timerContainer', timerController);
+  });
 })();
 
-},{"h5":2,"minesweeper-engine":5,"react":172,"react-dom":7}],2:[function(require,module,exports){
+},{"./formatter":1,"countup-timer":6,"h5":3,"minesweeper-engine":10,"react":177,"react-dom":12}],3:[function(require,module,exports){
 (function (global){
 
 ; jQuery = global.jQuery = require("jquery");
@@ -485,7 +568,7 @@ if(length===1||isPromise(promises)){var promise=length===1?promises[0]:promises;
 this._doneCallbackExecuter();return;} // プロミス配列を作っていない場合のremoveをここで定義(プロトタイプのremoveを上書き)
 this.remove=function(p){if(this._resolved||this._rejected){return;}if(promise===p){this._doneCallbackExecuter();}}; // 長さ1で、それがプロミスなら、そのプロミスにdoneとfailを引っかける
 promise.done(this._doneCallbackExecuter);promise.fail(this._failCallbackExecuter);return;} // promisesの中のプロミスオブジェクトの数(プロミスでないものは無視)
-// 引数に渡されたpromisesのうち、プロミスオブジェクトと判定���たものを列挙
+// 引数に渡されたpromisesのうち、プロミスオブジェクトと判定したものを列挙
 var monitoringPromises=[];for(var i=0,l=promises.length;i<l;i++){var p=promises[i];if(isPromise(p)){monitoringPromises.push(p);}}var promisesLength=monitoringPromises.length;if(promisesLength===0){ // プロミスが一つもなかった場合は即doneCallbackを実行
 this._resolved=true;doneCallback&&doneCallback();return;}this._promises=monitoringPromises;resolveArgs=[];this._resolveArgs=[];this._resolveCount=0;this._promisesLength=promisesLength; // いずれかのpromiseが成功するたびに全て終わったかチェックする関数
 function createCheckFunction(_promise){ // いずれかのpromiseが成功するたびに全て終わったかチェックする関数
@@ -552,7 +635,7 @@ var h5internal={core:{controllerInternal:null}}; /* ------ h5.u ------ */(functi
 // =============================
 /* del begin */ /**
 	 * 各エラーコードに対応するメッセージ
-	 */var errMsgMap={};errMsgMap[ERR_CODE_NAMESPACE_INVALID]='{0} 名前空間の指定が不正です。名前空間として有効な文字列を指定してください。';errMsgMap[ERR_CODE_NAMESPACE_EXIST]='名前空間"{0}"には、プロパティ"{1}"が既に存在します。';errMsgMap[ERR_CODE_SERIALIZE_FUNCTION]='Function型のオブジェクトは変換できません。';errMsgMap[ERR_CODE_SERIALIZE_VERSION]='シリアライザのバージョンが違います。シリアライズされたバージョン：{0} 現行のバージョン：{1}';errMsgMap[ERR_CODE_DESERIALIZE_TYPE]='型指定子が不正です。';errMsgMap[ERR_CODE_CIRCULAR_REFERENCE]='循環参照が含まれています。';errMsgMap[ERR_CODE_DESERIALIZE_VALUE]='不正な値が含まれるため、デシリアライズできませんでした。';errMsgMap[ERR_CODE_INVALID_SCRIPT_PATH]='スクリプトのパスが不正です。空文字以外の文字列、またはその配列を指定して下さい。';errMsgMap[ERR_CODE_INVALID_OPTION]='{0} オプションの指定が不正です。プレーンオブジェクトで指定してください。';errMsgMap[ERR_CODE_DESERIALIZE_ARGUMENT]='deserialize() 引数の値が不正です。引数には文字列を指定してください。';errMsgMap[ERR_CODE_SCRIPT_FILE_LOAD_FAILD]='スクリプトファイルの読み込みに失敗しました。URL:{0}'; // メッセージの登録
+	 */var errMsgMap={};errMsgMap[ERR_CODE_NAMESPACE_INVALID]='{0} 名前空間の指定が不正です。名前空間として有効な文字列を指定してください。';errMsgMap[ERR_CODE_NAMESPACE_EXIST]='名前空間"{0}"には、プロパティ"{1}"が既に存在します。';errMsgMap[ERR_CODE_SERIALIZE_FUNCTION]='Function型のオブジェクトは変換できません。';errMsgMap[ERR_CODE_SERIALIZE_VERSION]='シリアライザのバージ���ンが違います。シリアライズされたバージョン：{0} 現行のバージョン：{1}';errMsgMap[ERR_CODE_DESERIALIZE_TYPE]='型指定子が不正です。';errMsgMap[ERR_CODE_CIRCULAR_REFERENCE]='循環参照が含まれています。';errMsgMap[ERR_CODE_DESERIALIZE_VALUE]='不正な値が含まれるため、デシリアライズできませんでした。';errMsgMap[ERR_CODE_INVALID_SCRIPT_PATH]='スクリプトのパスが不正です。空文字以外の文字列、またはその配列を指定して下さい。';errMsgMap[ERR_CODE_INVALID_OPTION]='{0} オプションの指定が不正です。プレーンオブジェクトで指定してください。';errMsgMap[ERR_CODE_DESERIALIZE_ARGUMENT]='deserialize() 引数の値が不正です。引数には文字列を指定してください。';errMsgMap[ERR_CODE_SCRIPT_FILE_LOAD_FAILD]='スクリプトファイルの読み込みに失敗しました。URL:{0}'; // メッセージの登録
 addFwErrorCodeMap(errMsgMap); /* del end */ // =========================================================================
 //
 // Cache
@@ -724,7 +807,7 @@ loadedScripts.splice(i,1,url);}};}h5.async.when(promises).done(doneCallback).fai
 var seq=thenCompat(getDeferred().resolve(),asyncFunc);$.each(resources,function(){var url=toAbsoluteUrl(this.toString());seq=thenCompat(seq,function(){var df=getDeferred();if(!force&&(url in addedJS||url in loadedUrl)){df.resolve();}else {getScriptString(url,async,cache).done(function(text,status,xhr){if(atomic){scriptData.push(text);loadedUrl[url]=url;}else {$.globalEval(text);addedJS[url]=url;}df.resolve();}).fail(function(){df.reject(this.url);});}return df.promise();},retDfFailCallback);});thenCompat(seq,function(){if(atomic){$.each(scriptData,function(i,e){$.globalEval(e);});$.extend(addedJS,loadedUrl);}retDf.resolve();},retDfFailCallback);}}return retDf.promise();}else {$.each(resources,function(){var url=toAbsoluteUrl(this.toString());if(!force&&(url in addedJS||url in loadedUrl)){return true;}getScriptString(url,async,cache).done(function(text,status,xhr){if(atomic){scriptData.push(text);loadedUrl[url]=url;}else {$.globalEval(text);addedJS[url]=url;}}).fail(function(){throwFwError(ERR_CODE_SCRIPT_FILE_LOAD_FAILD,[url]);});});if(atomic){ // 読み込みに成功した全てのスクリプトを評価する
 $.each(scriptData,function(i,e){$.globalEval(e);});$.extend(addedJS,loadedUrl);} // 同期ロードの場合は何もreturnしない
 }} /**
-	 * 文字列のプレフィックスが指定したものかどう���を返します。
+	 * 文字列のプレフィックスが指定したものかどうかを返します。
 	 *
 	 * @param {String} str 文字列
 	 * @param {String} prefix プレフィックス
@@ -861,7 +944,7 @@ var path=/^\d+[\.|\[]/.test(c)?c:'0.'+c;var rep=getByPath(path,args);if((typeof 
 	 * 循環参照を含むarray型およびobject型はシリアライズできません。例外をスローします。
 	 * </p>
 	 * <p>
-	 * 内部に同一インスタンスを持つarray型またはobject型は、別インスタンスとしてシリアライズします。以下のようなarray型オブジェクトaにおいて、a[0]とa[1]が同一インスタンスであるという情報は保存しません。
+	 * 内部に同一インスタンスを持つarray型またはobject型は、別インスタンスとしてシリアライズします。以下のようなarray型オブジェクトaにお���て、a[0]とa[1]が同一インスタンスであるという情報は保存しません。
 	 *
 	 * <pre>
 	 * a = [];
@@ -960,7 +1043,7 @@ var val=func(obj[key]);ret[unescape(key)]=val;}break;case 'date':ret=new Date(pa
 	 * @name getByPath
 	 * @function
 	 * @memberOf h5.u.obj
-	 */function getByPath(namespace,rootObj){if(!isString(namespace)){throwFwError(ERR_CODE_NAMESPACE_INVALID,'h5.u.obj.getByPath()');} // 'ary[0]'のような配列のindex参照の記法���対応するため、'.'記法に変換する
+	 */function getByPath(namespace,rootObj){if(!isString(namespace)){throwFwError(ERR_CODE_NAMESPACE_INVALID,'h5.u.obj.getByPath()');} // 'ary[0]'のような配列のindex参照の記法に対応するため、'.'記法に変換する
 namespace=namespace.replace(/\[(\d+)\]/g,function(m,c,index){if(index){ // 先頭以外の場合は'[]'を外して'.'を付けて返す
 return '.'+c;} // 先頭の場合は'[]'を外すだけ
 return c;});var names=namespace.split('.');var idx=0;if(names[0]==='window'&&(!rootObj||rootObj===window)){ // rootObjが未指定またはwindowオブジェクトの場合、namespaceの最初のwindow.は無視する
@@ -1188,7 +1271,7 @@ if(_typeof(object[p])===TYPE_OF_UNDEFINED){return false;}}return true;};}$.exten
 		 * 指定したイベントに、指定したイベントリスナが既に登録されていた場合は何もしません。
 		 * </p>
 		 * <p>
-		 * 同一のイベントに対して複数回addEventListener()を呼び、複数のイベントリスナを登録した場合は、イベント発火時に登録した順番に実行されます。
+		 * 同一のイベントに対して複数回addEventListener()を呼び、複数のイベントリスナを登録した場合は、イベント発火時に登録した順番に実行され���す。
 		 * </p>
 		 * <p>
 		 * 第３引数以降が指定されていても無視されます。
@@ -1219,7 +1302,7 @@ return;}if(!this._eventListeners){this._eventListeners={};}if(!this._eventListen
 		 * イベントをディスパッチします
 		 * <p>
 		 * イベントオブジェクトを引数に取り、そのevent.typeに登録されているイベントリスナを実行します。
-		 * イベントオブジェクトにpreventDefault()関���を追加してイベントリスナの引数に渡して呼び出します。
+		 * イベントオブジェクトにpreventDefault()関数を追加してイベントリスナの引数に渡して呼び出します。
 		 * </p>
 		 * <p>
 		 * 戻り値は『イベントリスナ内でpreventDefault()が呼ばれたかどうか』を返します。
@@ -1565,7 +1648,7 @@ if(!isString(category)||$.trim(category).length===0){throwFwError(ERR_CODE_CATEG
 var e=new Error();var errMsg=e.stack||e.stacktrace;if(errMsg){ // stackまたはstacktraceがある場合(IE,Safari以外)
 // stackにはFW内部の関数も含まれるので、それを取り除く
 // new Error()を呼んだ場合に関数呼び出し３つ分省略すればいいが、minifyするとnew演算子が省略される
-// Chrome,FireFoxではnew演算子を省略するコンストラクト呼び出しがstackに入り、newを使った場合と結果が異なる
+// Chrome,FireFoxではnew演算子を省略するコンストラクト呼び出し���stackに入り、newを使った場合と結果が異なる
 // Operaではnew演算子を省略しても結果は変わらない
 // min版、dev版の互換とブラウザ互換をとるために、取り除く関数呼び出しはここの関数名を基点に数えて取り除く
 var CURRENT_FUNCTION_REGEXP=/_traceFunctionName/; // トレースされたログのうち、ここの関数から3メソッド分先までの関数呼び出しはログに出力しない。
@@ -2411,7 +2494,7 @@ if(jqWhenRet.progress){jqWhenRet.progress(function() /* ver_args */{ // jQuery1.
 // (notifyWithで呼んでも同様。指定したコンテキストは無視される。)
 // thisが$.whenの戻り値なら、h5.async.whenの戻り値のプロミスに差し替える
 dfd.notifyWith(this===jqWhenRet?whenPromise:this,argsToArray(arguments));});}else {var progressFunc=function progressFunc(index){ // args中の該当するindexに値を格納した配列をprogressコールバックに渡す
-return function(value){pValues[index]=arguments.length>1?argsToArray(arguments):value; // jQuery1.6では、jQuery1.7と同様の動作をするようにする。
+return function(value){pValues[index]=arguments.length>1?argsToArray(arguments):value; // jQuery1.6では、jQuery1.7と同様の動作をするようにする���
 // thisはh5.async.whenの戻り値と同じ。
 dfd.notifyWith(whenPromise,pValues);};}; // progressがない(=jQuery1.6.x)なら、progress機能を追加
 // progressの引数になる配列。
@@ -2585,7 +2668,7 @@ copyJqXHRProperties(jqXHRWrapper,_jqXHR);dfd.resolveWith(this,arguments);} /**
 // またはこれが最後のリトライ、
 // またはリトライ指定のない場合、
 // rejectして終了
-// jqXHRの���ロパティの値をラッパーにコピー
+// jqXHRのプロパティの値をラッパーにコピー
 // ラッパーは最終的なjqXHRの値を持てばいいので、rejectを呼ぶ直前で新しいjqXHRの値に変更する
 copyJqXHRProperties(jqXHRWrapper,_jqXHR);dfd.rejectWith(this,arguments);return;}settings.retryCount--;if(this.async){ // 非同期ならretryIntervalミリ秒待機してリトライ
 var that=this;setTimeout(function(){$.ajax(that).done(retryDone).fail(retryFail);},settings.retryInterval);}else { // 同期なら即リトライする
@@ -2866,10 +2949,10 @@ addResolver('namespace',null,resolveNamespace);addResolver('ejsfile',/.*\.ejs(\?
 	 * SVGの名前空間
 	 */var SVG_XMLNS='http://www.w3.org/2000/svg'; /**
 	 * セレクタのタイプを表す定数 イベントコンテキストの中に格納する
-	 */var SELECTOR_TYPE_CONST={SELECTOR_TYPE_LOCAL:1,SELECTOR_TYPE_GLOBAL:2,SELECTOR_TYPE_OBJECT:3};var SUFFIX_CONTROLLER='Controller';var SUFFIX_LOGIC='Logic';var EVENT_NAME_H5_TRACKSTART='h5trackstart';var EVENT_NAME_H5_TRACKMOVE='h5trackmove';var EVENT_NAME_H5_TRACKEND='h5trackend';var ROOT_ELEMENT_NAME='rootElement';var EVENT_NAME_TRIGGER_INDICATOR='triggerIndicator'; /** グローバルセレクタ指定かどうかの判定に使用する正規表現 */var GLOBAL_SELECTOR_REGEXP=/^\{.*\}$/; /** イベント名がバインドリクエスト指定かどうかの判定に使用する正規表現 */var BIND_REQUESTED_REGEXP=/^\[.*\]$/; /** インラインコメントテンプレートのコメントノードの開始文字列 */var COMMENT_BINDING_TARGET_MARKER='{h5view '; // エラーコード
+	 */var SELECTOR_TYPE_CONST={SELECTOR_TYPE_LOCAL:1,SELECTOR_TYPE_GLOBAL:2,SELECTOR_TYPE_OBJECT:3};var SUFFIX_CONTROLLER='Controller';var SUFFIX_LOGIC='Logic';var EVENT_NAME_H5_TRACKSTART='h5trackstart';var EVENT_NAME_H5_TRACKMOVE='h5trackmove';var EVENT_NAME_H5_TRACKEND='h5trackend';var ROOT_ELEMENT_NAME='rootElement';var EVENT_NAME_TRIGGER_INDICATOR='triggerIndicator'; /** ���ローバルセレクタ指定かどうかの判定に使用する正規表現 */var GLOBAL_SELECTOR_REGEXP=/^\{.*\}$/; /** イベント名がバインドリクエスト指定かどうかの判定に使用する正規表現 */var BIND_REQUESTED_REGEXP=/^\[.*\]$/; /** インラインコメントテンプレートのコメントノードの開始文字列 */var COMMENT_BINDING_TARGET_MARKER='{h5view '; // エラーコード
 /** エラーコード: テンプレートに渡すセレクタが不正（コントローラビューでテンプレートに渡せるセレクタはコントローラのイベントハンドラ記述と同じになりました(#349） */ //var ERR_CODE_INVALID_TEMPLATE_SELECTOR = 6000;
 /** エラーコード: バインド対象が指定されていない */var ERR_CODE_BIND_TARGET_REQUIRED=6001; /** エラーコード: bindControllerメソッドにコントローラではないオブジェクトが渡された（このエラーはver.1.1.3時点では通常発生しないので削除） */ //var ERR_CODE_BIND_NOT_CONTROLLER = 6002;
-/** エラーコード: バインド対象となるDOMがない */var ERR_CODE_BIND_NO_TARGET=6003; /** エラーコード: バインド対象となるDOMが複数存在する */var ERR_CODE_BIND_TOO_MANY_TARGET=6004; /** エラーコード: 指定された引数の数が少ない */var ERR_CODE_TOO_FEW_ARGUMENTS=6005; /** エラーコード: コントローラの名前が指定されていない */var ERR_CODE_INVALID_CONTROLLER_NAME=6006; /** エラーコード: コントローラの初期化パラメータが不正 */var ERR_CODE_CONTROLLER_INVALID_INIT_PARAM=6007; /** エラーコード: 既にコントローラ化されている */var ERR_CODE_CONTROLLER_ALREADY_CREATED=6008; /** エラーコード: コントローラの参照が循環している */var ERR_CODE_CONTROLLER_CIRCULAR_REF=6009; /** エラーコード: ロジックの参照が循環している */var ERR_CODE_LOGIC_CIRCULAR_REF=6010; /** エラーコード: コントローラ化によって追加されるプロパティと名前が重複している */var ERR_CODE_CONTROLLER_SAME_PROPERTY=6011; /** エラーコード: イベントハンドラのセレクタに{this}が指���されている */var ERR_CODE_EVENT_HANDLER_SELECTOR_THIS=6012; /** エラーコード: あるセレクタに対して重複したイベントハンドラが設定されている */var ERR_CODE_SAME_EVENT_HANDLER=6013; /** エラーコード: ロジックの名前に文字列が指定されていない */var ERR_CODE_INVALID_LOGIC_NAME=6017; /** エラーコード: 既にロジック化されている */var ERR_CODE_LOGIC_ALREADY_CREATED=6018; /** エラーコード: exposeする際にコントローラ、もしくはロジックの名前がない */var ERR_CODE_EXPOSE_NAME_REQUIRED=6019; /** エラーコード: Viewモジュールが組み込まれていない */var ERR_CODE_NOT_VIEW=6029; /** エラーコード：バインド対象を指定する引数に文字列、オブジェクト、配列以外が渡された */var ERR_CODE_BIND_TARGET_ILLEGAL=6030; /** エラーコード：ルートコントローラ以外ではcontroller.bind()/unbind()/dispose()はできない */var ERR_CODE_BIND_UNBIND_DISPOSE_ROOT_ONLY=6031; /** エラーコード：コントローラメソッドは最低2つの引数が必要 */var ERR_CODE_CONTROLLER_TOO_FEW_ARGS=6032; /** エラーコード：コントローラの初期化処理がユーザーコードによって中断された(__initや__readyで返したプロミスがrejectした) */var ERR_CODE_CONTROLLER_INIT_REJECTED_BY_USER=6033; /** エラーコード：コントローラのバインド対象がノードではない */var ERR_CODE_BIND_NOT_NODE=6034; /** エラーコード：ルートエレメント未設定もしくはunbindされたコントローラで使用できないメソッドが呼ばれた */var ERR_CODE_METHOD_OF_NO_ROOTELEMENT_CONTROLLER=6035; /** エラーコード：disposeされたコントローラで使用できないメソッドが呼ばれた */var ERR_CODE_METHOD_OF_DISPOSED_CONTROLLER=6036; /** エラーコード：unbindは__constructでは呼べない */var ERR_CODE_CONSTRUCT_CANNOT_CALL_UNBIND=6037; /** エラーコード：コントローラの終了処理がユーザーコードによって中断された(__disposeで返したプロミスがrejectした) */var ERR_CODE_CONTROLLER_DISPOSE_REJECTED_BY_USER=6038; /** エラーコード：manageChildの引数にコントローラインスタンス以外が渡された */var ERR_CODE_CONTROLLER_MANAGE_CHILD_NOT_CONTROLLER=6039; /** エラーコード：unbindされたコントローラをmanageChildしようとした */var ERR_CODE_CONTROLLER_MANAGE_CHILD_UNBINDED_CONTROLLER=6040; /** エラーコード：unbindされたコントローラのmanageChildが呼ばれた */var ERR_CODE_CONTROLLER_MANAGE_CHILD_BY_UNBINDED_CONTROLLER=6041; /** エラーコード：manageChildの引数のコントローラインスタンスがルートコントローラじゃない */var ERR_CODE_CONTROLLER_MANAGE_CHILD_NOT_ROOT_CONTROLLER=6042; /** エラーコード：unbindされたコントローラのunmanageChildが呼ばれた */var ERR_CODE_CONTROLLER_UNMANAGE_CHILD_BY_UNBINDED_CONTROLLER=6043; /** エラーコード：unmanageChildの引数のコントローラインスタンスが自分の子コントローラじゃない */var ERR_CODE_CONTROLLER_UNMANAGE_CHILD_NOT_CHILD_CONTROLLER=6044; /** エラーコード：unmanageChildの第1引数がルートエレメント未決定コントローラで、第2引数がfalse */var ERR_CODE_CONTROLLER_UNMANAGE_CHILD_NO_ROOT_ELEMENT=6045; /** エラーコード: コントローラのデフォルトパラメータが不正 */var ERR_CODE_CONTROLLER_INVALID_INIT_DEFAULT_PARAM=6046; // =============================
+/** エラーコード: バインド対象となるDOMがない */var ERR_CODE_BIND_NO_TARGET=6003; /** エラーコード: バインド対象となるDOMが複数存在する */var ERR_CODE_BIND_TOO_MANY_TARGET=6004; /** エラーコード: 指定された引数の数が少ない */var ERR_CODE_TOO_FEW_ARGUMENTS=6005; /** エラーコード: コントローラの名前が指定されていない */var ERR_CODE_INVALID_CONTROLLER_NAME=6006; /** エラーコード: コントローラの初期化パラメータが不正 */var ERR_CODE_CONTROLLER_INVALID_INIT_PARAM=6007; /** エラーコード: 既にコントローラ化されている */var ERR_CODE_CONTROLLER_ALREADY_CREATED=6008; /** エラーコード: コントローラの参照が循環している */var ERR_CODE_CONTROLLER_CIRCULAR_REF=6009; /** エラーコード: ロジックの参照が循環している */var ERR_CODE_LOGIC_CIRCULAR_REF=6010; /** エラーコード: コントローラ化によって追加されるプロパティと名前が重複している */var ERR_CODE_CONTROLLER_SAME_PROPERTY=6011; /** エラーコード: イベントハンドラのセレクタに{this}が指定されている */var ERR_CODE_EVENT_HANDLER_SELECTOR_THIS=6012; /** エラーコード: あるセレクタに対して重複したイベントハンドラが設定されている */var ERR_CODE_SAME_EVENT_HANDLER=6013; /** エラーコード: ロジックの名前に文字列が指定されていない */var ERR_CODE_INVALID_LOGIC_NAME=6017; /** エラーコード: 既にロジック化されている */var ERR_CODE_LOGIC_ALREADY_CREATED=6018; /** エラーコード: exposeする際にコントローラ、もしくはロジックの名前がない */var ERR_CODE_EXPOSE_NAME_REQUIRED=6019; /** エラーコード: Viewモジュールが組み込まれていない */var ERR_CODE_NOT_VIEW=6029; /** エラーコード：バインド対象を指定する引数に文字列、オブジェクト、配列以外が渡された */var ERR_CODE_BIND_TARGET_ILLEGAL=6030; /** エラーコード：ルートコントローラ以外ではcontroller.bind()/unbind()/dispose()はできない */var ERR_CODE_BIND_UNBIND_DISPOSE_ROOT_ONLY=6031; /** エラーコード：コントローラメソッドは最低2つの引数が必要 */var ERR_CODE_CONTROLLER_TOO_FEW_ARGS=6032; /** エラーコード：コントローラの初期化処理がユーザーコードによって中断された(__initや__readyで返したプロミスがrejectした) */var ERR_CODE_CONTROLLER_INIT_REJECTED_BY_USER=6033; /** エラーコード：コントローラのバインド対象がノードではない */var ERR_CODE_BIND_NOT_NODE=6034; /** エラーコード：ルートエレメント未設定もしくはunbindされたコントローラで使用できないメソッドが呼ばれた */var ERR_CODE_METHOD_OF_NO_ROOTELEMENT_CONTROLLER=6035; /** エラーコード：disposeされたコントローラで使用できないメソッドが呼ばれた */var ERR_CODE_METHOD_OF_DISPOSED_CONTROLLER=6036; /** エラーコード：unbindは__constructでは呼べない */var ERR_CODE_CONSTRUCT_CANNOT_CALL_UNBIND=6037; /** エラーコード：コントローラの終了処理がユーザーコードによって中断された(__disposeで返したプロミスがrejectした) */var ERR_CODE_CONTROLLER_DISPOSE_REJECTED_BY_USER=6038; /** エラーコード：manageChildの引数にコントローラインスタンス以外が渡された */var ERR_CODE_CONTROLLER_MANAGE_CHILD_NOT_CONTROLLER=6039; /** エラーコード：unbindされたコントローラをmanageChildしようとした */var ERR_CODE_CONTROLLER_MANAGE_CHILD_UNBINDED_CONTROLLER=6040; /** エラーコード：unbindされたコントローラのmanageChildが呼ばれた */var ERR_CODE_CONTROLLER_MANAGE_CHILD_BY_UNBINDED_CONTROLLER=6041; /** エラーコード：manageChildの引数のコントローラインスタンスがルートコントローラじゃない */var ERR_CODE_CONTROLLER_MANAGE_CHILD_NOT_ROOT_CONTROLLER=6042; /** エラーコード：unbindされたコントローラのunmanageChildが呼ばれた */var ERR_CODE_CONTROLLER_UNMANAGE_CHILD_BY_UNBINDED_CONTROLLER=6043; /** エラーコード：unmanageChildの引数のコントローラインスタンスが自分の子コントローラじゃない */var ERR_CODE_CONTROLLER_UNMANAGE_CHILD_NOT_CHILD_CONTROLLER=6044; /** エラーコード：unmanageChildの第1引数がルートエレメント未決定コントローラで、第2引数がfalse */var ERR_CODE_CONTROLLER_UNMANAGE_CHILD_NO_ROOT_ELEMENT=6045; /** エラーコード: コントローラのデフォルトパラメータが不正 */var ERR_CODE_CONTROLLER_INVALID_INIT_DEFAULT_PARAM=6046; // =============================
 // Development Only
 // =============================
 var fwLogger=h5.log.createLogger('h5.core'); /* del begin */ // ログメッセージ
@@ -2924,7 +3007,7 @@ var div=document.createElement('div');if(_typeof(div.style.touchAction)!==TYPE_O
 	 *
 	 * @private
 	 * @returns {Boolean}
-	 */var isSVGOffsetCollect=function(){var _isSVGOffsetCollect=null;return function(){if(_isSVGOffsetCollect!=null){ // 判定済みなら判定済み結果を返す
+	 */var isSVGOffsetCollect=function(){var _isSVGOffsetCollect=null;return function(){if(_isSVGOffsetCollect!=null){ // ���定済みなら判定済み結果を返す
 return _isSVGOffsetCollect;} // ダミーのsvg要素とrect要素を作って、正しく位置が取得できるかどうかの判定を行う
 var svg=document.createElementNS(SVG_XMLNS,'svg');svg.setAttribute('width',1);svg.setAttribute('height',1);var rect=document.createElementNS(SVG_XMLNS,'rect');rect.setAttribute('x',1);rect.setAttribute('y',1);rect.setAttribute('width',1);rect.setAttribute('height',1); // transformを空文字にして無効にする(cssで指定されていたとしても無効にして計算できるようにするため)
 clearTransformStyle(rect);$(function(){document.body.appendChild(svg); // svgのboudingClientRectのtopを取得
@@ -2945,7 +3028,7 @@ return _isSVGOffsetCollect;};}(); // --------------------------------- コント
 	 * @param {Object} controllerDefObj
 	 * @param {String} controllerName
 	 */function validateControllerDef(isRoot,targetElement,controllerDefObj,controllerName){ // コントローラ定義オブジェクトに、コントローラが追加するプロパティと重複するプロパティがあるかどうかチェック
-if(!controllerPropertyMap){ // 重複チェックが初めて呼ばれ���時にコントローラプロパティマップを生成してチェックで使用する
+if(!controllerPropertyMap){ // 重複チェックが初めて呼ばれた時にコントローラプロパティマップを生成してチェックで使用する
 controllerPropertyMap={};var tempInstance=new Controller(null,'a');for(var p in tempInstance){if(tempInstance.hasOwnProperty(p)&&p!=='__name'&&p!=='__templates'&&p!=='__meta'){controllerPropertyMap[p]=1;}}tempInstance=null;var proto=Controller.prototype;for(var p in proto){if(proto.hasOwnProperty(p)){controllerPropertyMap[p]=null;}}proto=null;}for(var prop in controllerDefObj){if(prop in controllerPropertyMap){ // コントローラが追加するプロパティと同じプロパティ名のものがあればエラー
 throwFwError(ERR_CODE_CONTROLLER_SAME_PROPERTY,[controllerName,prop],{controllerDefObj:controllerDefObj});}}} /**
 	 * コントローラ定義オブジェクトの子孫コントローラ定義が循環参照になっているかどうかをチェックします。
@@ -3090,7 +3173,7 @@ return endsWith(prop,SUFFIX_CONTROLLER)&&prop!=='rootController'&&prop!=='parent
 	 * @returns {Boolean} ロジックのプロパティが第1引数のロジックの子ロジックかどうか(true=子ロジックである)
 	 */function isChildLogic(logic,prop){ // hasOwnPropertyがtrueで、"Logic"で終わっているプロパティ名のものは子ロジック。ロジック化の対象になる。
 return logic.hasOwnProperty(prop)&&endsWith(prop,SUFFIX_LOGIC);} /**
-	 * 指定されたコントローラ直下の子コントローラについて、コールバックを実行します
+	 * 指定されたコントローラ直下の子コントロー���について、コールバックを実行します
 	 *
 	 * <pre>
 	 * function(controller, parentController, prop) {}
@@ -3243,7 +3326,7 @@ controller.__controllerContext.boundHandlers=[];} /**
 	 * 指定されたフラグで子コントローラを含む全てのコントローラのexecuteListenersフラグを変更します。
 	 *
 	 * @private
-	 * @param {Controller} controller コントローラ
+	 * @param {Controller} controller コント���ーラ
 	 * @param {Boolean} flag フラグ
 	 */function setExecuteListenersFlag(controller,flag){doForEachControllerGroups(controller,function(c){c.__controllerContext.executeListeners=flag;});} /**
 	 * コントローラに定義されたライフサイクルイベントを呼び出す関数を作成する
@@ -3577,7 +3660,7 @@ normalizeEventObjext(event);return new EventContext(bindObj.controller,event,evA
 	 * 初期化イベントコンテキストをセットアップします。
 	 *
 	 * @private
-	 * @param {Controller} rootController ル���トコントローラ
+	 * @param {Controller} rootController ルートコントローラ
 	 * @returns {Object} argsを持つオブジェクト
 	 */function createInitializationContext(controller){return {args:controller.__controllerContext.args};} /**
 	 * コントローラとその子孫コントローラのrootElementと、view.__controllerにnullをセットします。
@@ -3642,7 +3725,7 @@ controller.__controllerContext.triggerPostInitExecuted=true;executeLifecycleEven
 	 * @private
 	 * @param {Controller} controller コントローラ(ルートコントローラ)
 	 * @param {String} funcName プロパティ名(__unbind | __dispose)
-	 * @returns {Promise[]} Promiseオブジェクト
+	 * @returns {Promise[]} Promiseオブジェ���ト
 	 */function executeLifeEndChain(controller,funcName){var promises=[];var error=null; // 深さ優先で__unbind,__disposeの実行
 doForEachControllerGroupsDepthFirst(controller,function(c){if(c[funcName]&&isFunction(c[funcName])){try{var ret=c[funcName]();}catch(e){ // エラーが起きても__unbind,__disposeの実行のチェーンは継続させる
 // 最初に起きたエラーを覚えておいて、それ以降に起きたエラーは無視
@@ -3668,7 +3751,7 @@ throw error;}return promises;} /**
 // rootControllerが設定される前(__construct内からdispose()を呼び出した場合)のことを考慮して、
 // rootControllerを取得する前にisRootを見てtrueならcontrollerをルートコントローラとみなす
 var rootController=controller.__controllerContext&&(controller.__controllerContext.isRoot?controller:controller.rootController);if(!rootController){ // rootControllerが無い場合、
-// エラーオブジェクトがあればエラーを投げて終了。エラーのない場合は何もしないで終了���
+// エラーオブジェクトがあればエラーを投げて終了。エラーのない場合は何もしないで終了。
 if(e){ // ライフサイクルの中でdispose()して、__unbindや__disposeでエラーが出た時に、
 // ライフサイクル呼び出しを包んでいるtry-catchのcatch節から再度disposeControllerが呼ばれる。
 // その時に、dispose()の呼び出しで起きたエラーを飲まないようにするため、ここで再スローする。
@@ -3901,7 +3984,7 @@ doForEachLogics(logic,execInner); /**
 			 */function executeReady(){if(logic.__logicContext.isCalledReady){ // 既に__ready呼び出し済みなら何もしない
 return;}var isChildrenReady=true;doForEachLogics(logic,function(child){ // isReadyがfalseなものが一つでもあればfalseを返して探索を終了
 // 子がいない場合はisChidrenReadyはtrueのまま
-isChildrenReady=child.__logicContext.isReady;return isChildrenReady;});if(isChildrenReady){ // __readyを実行
+isChildrenReady=child.__logicContext.isReady;return isChildrenReady;});if(isChildrenReady){ // __readyを���行
 var ret=isFunction(logic.__ready)&&logic.__ready();logic.__logicContext.isCalledReady=true;if(isPromise(ret)){ // __readyが返したプロミスをwaitingPromisesに覚えておく
 waitingPromises.push(ret);ret.done(function(){ // __readyが返したプロミスがresolveされたらisReady=trueにする
 logic.__logicContext.isReady=true; // waitingPromisesから、resolveしたプロミスを取り除く
@@ -3923,7 +4006,7 @@ addDoneListener(waitingPromises[i],logic,executeReady);}}}executeReady();}execIn
 	 *
 	 * @private
 	 */function isSameBindTarget(target1,target2){if(target1===target2){ // 同一インスタンスならtrue
-return true;}var isT1Jquery=isJQueryObject(target1);var isT2Jquery=isJQueryObject(target2);if(!isT1Jquery&&!isT2Jquery){ // どちら���jQueryオブジェクトでないならfalse;
+return true;}var isT1Jquery=isJQueryObject(target1);var isT2Jquery=isJQueryObject(target2);if(!isT1Jquery&&!isT2Jquery){ // どちらもjQueryオブジェクトでないならfalse;
 return false;} // どちらかがjQueryオブジェクトなら配列にして比較
 var t1Ary=isT1Jquery?target1.toArray():[target1];var t2Ary=isT2Jquery?target2.toArray():[target2];if(t1Ary.length!==t2Ary.length){ // 長さが違うならfalse
 return false;}for(var i=0,l=t1Ary.length;i<l;i++){if(t1Ary[i]!==t2Ary[i]){return false;}}return true;} /**
@@ -4013,7 +4096,7 @@ function controllerFactory(controller,rootElement,controllerName,controllerDef,a
 			 *
 			 * @type Boolean
 			 */executeListeners:true, /**
-			 * ルートコントローラかどうか
+			 * ルー���コントローラかどうか
 			 *
 			 * @type Boolean
 			 */isRoot:isRoot, /**
@@ -4061,7 +4144,7 @@ controller.__controllerContext.args=args;} /**
 		 * @memberOf Controller
 		 * @name parentController
 		 */controller.parentController=null; /**
-		 * __templatesに指定したテンプレートファイルの読み込み���、成功または失敗したかの状態を持つPromiseオブジェクト。
+		 * __templatesに指定したテンプレートファイルの読み込みに、成功または失敗したかの状態を持つPromiseオブジェクト。
 		 * このオブジェクトが持つ以下の関数で、状態をチェックすることができます。
 		 * <p>
 		 * <b>state()</b> <table border="1">
@@ -4754,7 +4837,7 @@ controllerContext.managed=fwOpt&&fwOpt.managed; // __constructを実行(子コ�
 try{controller.__construct&&controller.__construct(createInitializationContext(controller));if(isDisposing(controller)){ // 途中(__constructの中)でdisposeされたら__constructの実行を中断
 return null;}}catch(e){ // ルートコントローラを渡してdisposeする
 disposeController(rootController,e);return null;} // __construct呼び出し後にparentControllerとrootControllerの設定
-if(isRoot){ // ルートコントローラの場合(parentが無い場合)、rootControllerは自分自身、parentControllerはnull
+if(isRoot){ // ルートコ���トローラの場合(parentが無い場合)、rootControllerは自分自身、parentControllerはnull
 controller.rootController=controller;controller.parentController=null;}else { // rootControllerはisRoot===trueのコントローラには設定済みなので、親から子に同じrootControllerを引き継ぐ
 controller.parentController=fwOpt.parentController;controller.rootController=fwOpt.rootController;} // 動的に追加されたコントローラ(__constructのタイミングで追加されたコントローラ)について、
 // ルートコントローラを設定する
@@ -4766,7 +4849,7 @@ var meta=controller.__meta;for(var i=0,l=cache.childControllerProperties.length;
 var prop=cache.childControllerProperties[i];var childController=clonedControllerDef[prop]; // 子コントローラにパラメータを引き継ぐかどうか
 var childArgs=null;if(meta&&meta[prop]&&meta[prop].inheritArgs){childArgs=args;}if(isDependency(childController)){ // Dependencyオブジェクトが指定されていた場合は依存関係を解決する
 var promise=childController.resolve('namespace');promisesForTriggerInit.push(promise);promise.done(function(childProp,childControllerPromise,cp){return function(c){var child=createAndBindController(null,$.extend(true,{},c),cp,{isInternal:true,parentController:controller,rootController:rootController,promisesForTriggerInit:promisesForTriggerInit,async:async});if(child==null){ // __constructで失敗したりdisposeされた場合はnullが返ってくるので
-// 子コン���ローラの__constructが正しく実行されなかった場合は以降何もしない
+// 子コントローラの__constructが正しく実行されなかった場合は以降何もしない
 return null;}controller[childProp]=child;controller.__controllerContext.childControllers.push(child); // createAndBindControllerの呼び出しが終わったら、プロミスを取り除く
 promisesForTriggerInit.splice($.inArray(childControllerPromise,promisesForTriggerInit),1);};}(prop,promise,childArgs));}else {var child=createAndBindController(null,$.extend(true,{},clonedControllerDef[prop]),childArgs,{isInternal:true,parentController:controller,rootController:rootController});if(child==null){ // __constructで失敗したりdisposeされた場合はnullが返ってくるので
 // 子コントローラの__constructが正しく実行されなかった場合は以降何もしない
@@ -4918,7 +5001,7 @@ addFwErrorCodeMap(errMsgMap); // =============================
 	 * @param value
 	 * @returns {Boolean}
 	 */function isDate(value){return value instanceof Date;} /**
-	 * 各条件について結果をANDで評価する関数を生成して返します
+	 * 各条件について結果をANDで���価する関数を生成して返します
 	 *
 	 * @private
 	 * @param {Object} compiledCriteria コンパイル済みcriteria
@@ -5037,7 +5120,7 @@ $.extend(Query.prototype,{ /**
 		 * 検索条件オブジェクトは、"プロパティ名 (演算子)"をキーにして、比較する値を値に持つオブジェクトを指定します。
 		 * 複数のプロパティを持つオブジェクトはデフォルトではANDで評価します。
 		 * <p>
-		 * 演算子には、===,!==,==,!=,>=,<=,between,!between,in,!inを指定できます。省略した場合は===です。
+		 * 演算子には、===,!==,==,!=,>=,<=,between,!between,in,!inを指���できます。省略した場合は===です。
 		 * </p>
 		 * 検索条件オブジェクトに"__op"プロパティを持たせて、値に'or'を記述すると、ORでの評価になります。 ('and'を設定すると記述しない場合と同様ANDでの評価になります。
 		 * </p>
@@ -5074,7 +5157,7 @@ if(this._orderFunction){result.sort(this._orderFunction);}else if(this._addedOrd
 // p1,p2が2つとも昇順で登録されている場合、p1で昇順ソートになっていて、p1が同じものについてはp2で昇順ソートされるようにする
 for(var i=0;i<keysLength;i++){var order=addedOrders[i];var key=order.key;var isAsc=order.isAsc;var val1=item1.get(key);var val2=item2.get(key);if(val1>val2){return isAsc?1:-1;}if(val1<val2){return isAsc?-1:1;}}return 0;});}return new QueryResult(result);}, // TODO Liveクエリの仕様は再検討する
 //		/**
-//		 * クエリをライブクエリにし���す
+//		 * クエリをライブクエリにします
 //		 * <p>
 //		 * ライブクエリにすると、検索条件がセットされた時やDataModelに変更があった時に検索結果が動的に変更されます。(executeを呼ぶ必要がありません)
 //		 * </p>
@@ -5248,9 +5331,9 @@ h5internal.data={createQuery:createQuery};})(); /* ------ h5.core.data ------ */
 var fwLogger=h5.log.createLogger('h5.core.data'); /* del begin */ // 詳細エラーメッセージを作成する関数をカスタムフォーマッタに登録
 function formatDescriptorError(code,msgSrc,msgParam,detail){var msg=h5.u.str.format.apply(null,[msgSrc].concat(msgParam))+' 詳細：';for(var i=0,len=detail.length;i<len;i++){if(i!==0){msg+=', ';}msg+=i+1+':';var reason=detail[i];if(reason.message){msg+=reason.message;}else {msg+='code='+reason.code;}}return msg;}addFwErrorCustomFormatter(ERR_CODE_INVALID_DESCRIPTOR,formatDescriptorError);addFwErrorCustomFormatter(ERR_CODE_INVALID_SCHEMA,formatDescriptorError); /**
 	 * 各エラーコードに対応するメッセージ
-	 */var errMsgMap={};errMsgMap[ERR_CODE_REQUIRE_SCHEMA]='スキーマオブジェクトが指定されていません。';errMsgMap[ERR_CODE_INVALID_SCHEMA]='スキーマ定義オブジェクトが不正です。';errMsgMap[ERR_CODE_INVALID_ITEM_VALUE]='Itemのsetterに渡された値がスキーマで指定された型・制約に違反しています。データモデル={0} 違反したプロパティ={1}';errMsgMap[ERR_CODE_DEPEND_PROPERTY]='depend指定されているプロパティに値をセットすることはできません。データモデル={0} 違反したプロパティ={1}';errMsgMap[ERR_CODE_CANNOT_SET_NOT_DEFINED_PROPERTY]='スキーマに定義されていないプロパティに値をセットすることはできません。データモデル={0} 違反したプロパティ={1}';errMsgMap[ERR_CODE_CANNOT_GET_NOT_DEFINED_PROPERTY]='スキーマに定義されていないプロパティは取得できません。データモデル={0} 違反したプロパティ={1}';errMsgMap[ERR_CODE_CALC_RETURNED_INVALID_VALUE]='calcで返却された値が、スキーマで指定された型・制約に違反しています。データモデル={0} プロパティ={1} 返却値={2}';errMsgMap[ERR_CODE_INVALID_COPYFROM_ARGUMENT]='copyFromの引数が不正です。配列を指定してください。引数位置={0}、値={1}';errMsgMap[ERR_CODE_INVALID_MANAGER_NAME]='マネージャ名が不正です。識別子として有効な文字列を指定してください。';errMsgMap[ERR_CODE_NO_ID]='データアイテムの生成にはID項目の値の設定が必須です。データモデル={0} IDプロパティ={1}';errMsgMap[ERR_CODE_INVALID_DESCRIPTOR]='データモデルディスクリプタにエラーがあります。';errMsgMap[ERR_CODE_CANNOT_SET_ID]='id指定されたプロパティを変更することはできません。データモデル={0} プロパティ={1}';errMsgMap[ERR_CODE_DESCRIPTOR_CIRCULAR_REF]='Datamaneger.createModelに渡された配列内のディスクリプタについて、baseやtypeによる依存関係が循環参照しています。';errMsgMap[ERR_CODE_CANNOT_CHANGE_REMOVED_ITEM]='DataModelに属していないDataItem、またはDataManagerに属していないDataModelのDataItemの中身は変更できません。データアイテムID={0}, メソッド={1}';errMsgMap[ERR_CODE_CANNOT_CHANGE_DROPPED_MODEL]='DataManagerに属していないDataModelの中身は変更できません。モデル名={0}, メソッド={1}';errMsgMap[ERR_CODE_INVALID_CREATE_ARGS]='DataModel.createに渡された引数が不正です。オブジェクトまたは、配列を指定してください。'; // メッセージの登録
+	 */var errMsgMap={};errMsgMap[ERR_CODE_REQUIRE_SCHEMA]='スキーマオブジェクトが指定されていません。';errMsgMap[ERR_CODE_INVALID_SCHEMA]='スキーマ定義オブジェクトが不正です。';errMsgMap[ERR_CODE_INVALID_ITEM_VALUE]='Itemのsetterに渡された値がスキーマで指定された型・制約に違反しています。データモデル={0} 違反したプロパティ={1}';errMsgMap[ERR_CODE_DEPEND_PROPERTY]='depend指定されているプロパティに���をセットすることはできません。データモデル={0} 違反したプロパティ={1}';errMsgMap[ERR_CODE_CANNOT_SET_NOT_DEFINED_PROPERTY]='スキーマに定義されていないプロパティに値をセットすることはできません。データモデル={0} 違反したプロパティ={1}';errMsgMap[ERR_CODE_CANNOT_GET_NOT_DEFINED_PROPERTY]='スキーマに定義されていないプロパティは取得できません。データモデル={0} 違反したプロパティ={1}';errMsgMap[ERR_CODE_CALC_RETURNED_INVALID_VALUE]='calcで返却された値が、スキーマで指定された型・制約に違反しています。データモデル={0} プロパティ={1} 返却値={2}';errMsgMap[ERR_CODE_INVALID_COPYFROM_ARGUMENT]='copyFromの引数が不正です。配列を指定してください。引数位置={0}、値={1}';errMsgMap[ERR_CODE_INVALID_MANAGER_NAME]='マネージャ名が不正です。識別子として有効な文字列を指定してください。';errMsgMap[ERR_CODE_NO_ID]='データアイテムの生成にはID項目の値の設定が必須です。データモデル={0} IDプロパティ={1}';errMsgMap[ERR_CODE_INVALID_DESCRIPTOR]='データモデルディスクリプタにエラーがあります。';errMsgMap[ERR_CODE_CANNOT_SET_ID]='id指定されたプロパティを変更することはできません。データモデル={0} プロパティ={1}';errMsgMap[ERR_CODE_DESCRIPTOR_CIRCULAR_REF]='Datamaneger.createModelに渡された配列内のディスクリプタについて、baseやtypeによる依存関係が循環参照しています。';errMsgMap[ERR_CODE_CANNOT_CHANGE_REMOVED_ITEM]='DataModelに属していないDataItem、またはDataManagerに属していないDataModelのDataItemの中身は変更できません。データアイテムID={0}, メソッド={1}';errMsgMap[ERR_CODE_CANNOT_CHANGE_DROPPED_MODEL]='DataManagerに属していないDataModelの中身は変更できません。モデル名={0}, メソッド={1}';errMsgMap[ERR_CODE_INVALID_CREATE_ARGS]='DataModel.createに渡された引数が不正です。オブジェクトまたは、配列を指定してください。'; // メッセージの登録
 addFwErrorCodeMap(errMsgMap); // detailに格納するメッセージ
-var DESCRIPTOR_VALIDATION_ERROR_MSGS={};DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_DUPLICATED_ID]='ID指定されているプロパティが複数あります。ID指定は1つのプロパティのみに指定してください。';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_NO_ID]='ID指定されているプロパティがありません。ID指定は必須です。';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_INVALID_PROPERTY_NAME]='{0}をプロパティ名に指定できません。半角英数字,_,$ で構成される文字列で、先頭は数字以外である必要があります。';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_ID_DEPEND]='"{0}"プロパティの定義にエラーがあります。id指定されたプロパティにdependを指定することはできません。';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_DEPEND_ON]='"{0}"プロパティプロパティの定義にエラーがあります。depend.onに指定されたプロパティが存在しません。';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_DEPEND_CALC]='"{0}"プロパティプロパティの定義にエラーがあります。depend.calcには関数を指定する必要があります';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_INVALID_TYPE]='"{0}"プロパティプロパティの定義にエラーがあります。typeは文字列で指定して下さい。';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_TYPE]='プロパティの定義にエラーがあります。typeに指定された文字列が不正です "{1}"';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_TYPE_DATAMODEL]='"{0}"プロパティの定義にエラーがあります。 typeに指定されたデータモデル"{1}"は存在しません';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_TYPE_ENUM_NO_ENUMVALUE]='"{0}"プロパティの定義にエラーがあります。 タイプにenumを指定する場合はenumValueも指定する必要があります';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_INVALID_CONSTRAINT]='"{0}"プロパティの定義にエラーがあります。 constraintはオブジェクトで指定してください';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_INVALID_CONSTRAINT_NOTNULL_NOTEMPTY]='"{0}"プロパティの定義にエラーがあります。 constraint.{1} の指定が不正です。trueまたはfalseで指定してください。';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_INVALID_CONSTRAINT_MIN_MAX]='"{0}"プロパティの定義にエラーがあります。 constraint.{1} は、数値で指定してください。typeにintegerを指定している場合は整数値で指定する必要があります';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_TYPE_CONSTRAINT]='"{0}"プロパティの定義にエラーがあります。 constraint.{1} は、type:{2}の項目に対して指定することはできません。';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_INVALID_CONSTRAINT_PATTERN]='"{0}"プロパティ constraint.{1}は正規表現オブジェクトで指定してください。';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_INVALID_CONSTRAINT_MINLENGTH_MAXLENGTH]='"{0}"プロパティの定義にエラーがあります。 constraint.{1}には正の整数を指定してください';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_CONSTRAINT_CONFLICT]='"{0}"プロパティの定義にエラーがあります。 constraintに矛盾する指定があります。{1},{2}';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_ENUMVALUE_TYPE]='"{0}"プロパティの定義にエラーがあります。 enumValueはtypeに"enum"またはその配列が指定されている場合のみ指定可能です';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_INVALID_ENUMVALUE]='"{0}"プロパティの定義にエラーがあります。 enumValueはnull,undefinedを含まない長さ1以上の配列を指定してください';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_DEFAULTVALUE_ID]='"{0}"プロパティの定義にエラーがあります。id指定した項目にdefaultValueを設定することはできません';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_INVALIDATE_DEFAULTVALUE]='"{0}"プロパティのdefaultValueに設定された値"{1}"は、typeまたはconstraintに定義された条件を満たしていません';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_CONSTRAINT_CONFLICT_ID]='"{0}"プロパティの定義にエラーがあります。id指定された項目にconstraint.{1}:{2}を指定することはできません';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_DEFAULTVALUE_DEPEND]='"{0}"プロパティの定義にエラーがあります。dependが指定された項目にdefaultValueを指定することはできません。';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_DEPEND_CIRCULAR_REF]='"{0}"プロパティの定義にエラーがあります。depend.onに指定されたプロパティの依存関係が循環しています';DESCRIPTOR_VALIDATION_ERROR_MSGS[DESC_ERR_DETAIL_NOT_OBJECT]='DataModelのディスクリプタにはオブジェクトを指定してください。';DESCRIPTOR_VALIDATION_ERROR_MSGS[DESC_ERR_DETAIL_INVALID_NAME]='データモデル名が不正です。使用できる文字は、半角英数字、_、$、のみで、先頭は数字以外である必要があります。';DESCRIPTOR_VALIDATION_ERROR_MSGS[DESC_ERR_DETAIL_INVALID_BASE]='baseの指定が不正です。指定する場合は、継承したいデータモデル名の先頭に"@"を付けた文字列を指定してください。';DESCRIPTOR_VALIDATION_ERROR_MSGS[DESC_ERR_DETAIL_NO_EXIST_BASE]='baseの指定が不正です。指定されたデータモデル{0}は存在しません。';DESCRIPTOR_VALIDATION_ERROR_MSGS[DESC_ERR_DETAIL_NO_SCHEMA]='schemaの指定が不正です。baseの指定がない場合はschemaの指定は必須です。';DESCRIPTOR_VALIDATION_ERROR_MSGS[DESC_ERR_DETAIL_SCHEMA_IS_NOT_OBJECT]='schemaの指定が不正です。schemaはオブジェクトで指定してください。';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_ID_TYPE]='"{0}"プロパティの定義にエラーがあります。id指定されたプロパティには"string","integer"以外のtypeを指定することはできません。'; // ログメッセージ
+var DESCRIPTOR_VALIDATION_ERROR_MSGS={};DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_DUPLICATED_ID]='ID指定されているプロパティが複数あります。ID指定は1つのプロパティのみに指定してください。';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_NO_ID]='ID指定されているプロパティがありません。ID指定は必須です。';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_INVALID_PROPERTY_NAME]='{0}をプロパティ名に指定できません。半角英数字,_,$ で構成される文字列で、先頭は数字以外である必要があります。';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_ID_DEPEND]='"{0}"プロパティの定義にエラーがあります。id指定されたプロパティにdependを指定することはできません。';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_DEPEND_ON]='"{0}"プロパティプロパティの定義にエラーがあります。depend.onに指定されたプロパティが存在しません。';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_DEPEND_CALC]='"{0}"プロパティプロパティの定義にエラーがあります。depend.calcには関数を指定する必要があります';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_INVALID_TYPE]='"{0}"プロパティプロパティの定義にエラーがあります。typeは文字列で指定して下さい。';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_TYPE]='プロパティの定義にエラーがあります。typeに指定された文字列が不正です "{1}"';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_TYPE_DATAMODEL]='"{0}"プロパティの定義にエラーがあります。 typeに指定されたデータモデル"{1}"は存在しません';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_TYPE_ENUM_NO_ENUMVALUE]='"{0}"プロパティの定義にエラーがあります。 タイプにenumを指定する場合はenumValueも指定する必要があります';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_INVALID_CONSTRAINT]='"{0}"プロパティの定義にエラーがあります。 constraintはオブジェクトで指定してください';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_INVALID_CONSTRAINT_NOTNULL_NOTEMPTY]='"{0}"プロパティの定義にエラーがあります。 constraint.{1} の指定が不正です。trueまたはfalseで指定してください。';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_INVALID_CONSTRAINT_MIN_MAX]='"{0}"プロパティの定義にエラーがあります。 constraint.{1} は、数値で指定してください。typeにintegerを指定している場合は整数値で指定する必要があります';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_TYPE_CONSTRAINT]='"{0}"プロパティの定義にエラーがあります。 constraint.{1} は、type:{2}の項目に対して指定することはできません。';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_INVALID_CONSTRAINT_PATTERN]='"{0}"プロパティ constraint.{1}は正規表現オブジェクトで指定してください。';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_INVALID_CONSTRAINT_MINLENGTH_MAXLENGTH]='"{0}"プロパティの定義にエラーがあります。 constraint.{1}には正の整数を指定してください';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_CONSTRAINT_CONFLICT]='"{0}"プロパティの定義にエラーがあります。 constraintに矛盾する指定があります。{1},{2}';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_ENUMVALUE_TYPE]='"{0}"プロパティの定義にエラーがあります。 enumValueはtypeに"enum"またはその配列が指定されている場合のみ指定可能です';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_INVALID_ENUMVALUE]='"{0}"プロパティの定義にエラーがあります。 enumValueはnull,undefinedを含まない長さ1以上の配列を指定してください';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_DEFAULTVALUE_ID]='"{0}"プロパティの定義にエラーがあります。id指定した項目にdefaultValueを設定することはできません';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_INVALIDATE_DEFAULTVALUE]='"{0}"プロパティのdefaultValueに設定された値"{1}"は、typeまたはconstraintに定義された条件を満たしていません';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_CONSTRAINT_CONFLICT_ID]='"{0}"プロパティの定義にエラーがあります。id指定された項目にconstraint.{1}:{2}を指定することはできません';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_DEFAULTVALUE_DEPEND]='"{0}"プロパティの定義にエラーがあります。dependが指定された項目にdefaultValueを指定することはできません。';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_DETAIL_DEPEND_CIRCULAR_REF]='"{0}"プロパティの定義にエラーがあります。depend.onに指定されたプロパティの依存関係が循環しています';DESCRIPTOR_VALIDATION_ERROR_MSGS[DESC_ERR_DETAIL_NOT_OBJECT]='DataModelのディスクリプタにはオブジェクトを指定してください。';DESCRIPTOR_VALIDATION_ERROR_MSGS[DESC_ERR_DETAIL_INVALID_NAME]='データモデル名が不正です。使用できる文字は、半角英数字、_、$、のみで、先頭は数字以外である必要があります。';DESCRIPTOR_VALIDATION_ERROR_MSGS[DESC_ERR_DETAIL_INVALID_BASE]='baseの指定が不正です。指定する場合は、継承したいデータモデル名の先頭に"@"を付けた文字列を指定してください。';DESCRIPTOR_VALIDATION_ERROR_MSGS[DESC_ERR_DETAIL_NO_EXIST_BASE]='baseの指定が不正です。指定されたデータモデル{0}は存在しません。';DESCRIPTOR_VALIDATION_ERROR_MSGS[DESC_ERR_DETAIL_NO_SCHEMA]='schemaの指定が不正です。base���指定がない場合はschemaの指定は必須です。';DESCRIPTOR_VALIDATION_ERROR_MSGS[DESC_ERR_DETAIL_SCHEMA_IS_NOT_OBJECT]='schemaの指定が不正です。schemaはオブジェクトで指定してください。';DESCRIPTOR_VALIDATION_ERROR_MSGS[SCHEMA_ERR_ID_TYPE]='"{0}"プロパティの定義にエラーがあります。id指定されたプロパティには"string","integer"以外のtypeを指定することはできません。'; // ログメッセージ
 var MSG_ERROR_DUP_REGISTER='同じ名前のデータモデルを登録しようとしました。同名のデータモデルの2度目以降の登録は無視されます。マネージャ名は {0}, 登録しようとしたデータモデル名は {1} です。'; /* del end */ // =========================================================================
 //
 // Cache
@@ -5279,7 +5362,7 @@ var MSG_ERROR_DUP_REGISTER='同じ名前のデータモデルを登録しよう�
 		 * @memberOf DataItem
 		 * @param {String} [key] プロパティキー。指定のない場合は、アイテムの持つプロパティ名をキーに、そのプロパティの値を持つオブジェクトを返します。
 		 * @returns Any 指定されたプロパティの値。引数なしの場合はプロパティキーと値を持つオブジェクト。
-		 */get:function get(key){if(arguments.length===0){return $.extend({},this._values);} // DataItemの場合はモデルから、ObsItemの場合はObsItemのインスタンスか���schemaを取得
+		 */get:function get(key){if(arguments.length===0){return $.extend({},this._values);} // DataItemの場合はモデルから、ObsItemの場合はObsItemのインスタンスからschemaを取得
 var model=this._model;var schema=model?model.schema:this.schema;if(!schema.hasOwnProperty(key)){ //スキーマに存在しないプロパティはgetできない（プログラムのミスがすぐわかるように例外を送出）
 throwFwError(ERR_CODE_CANNOT_GET_NOT_DEFINED_PROPERTY,[model?model.name:NOT_AVAILABLE,key]);}return getValue(this,key);}, /**
 		 * 指定されたキーのプロパティに値をセットします。
@@ -5344,7 +5427,7 @@ this.dispatchEvent(event);}}, /**
 		 * @private
 		 * @memberOf DataItem
 		 * @returns {Boolean} 指定されたプロパティがtype:[]なプロパティかどうか
-		 */_isArrayProp:function _isArrayProp(prop){ // DataItemの場合はモデルから、ObsItemの場合はObsItemのインスタンスからschemaを取得
+		 */_isArrayProp:function _isArrayProp(prop){ // DataItemの場合はモデルから���ObsItemの場合はObsItemのインスタンスからschemaを取得
 var schema=this._model?this._model.schema:this.schema; // DataItemの場合はモデルから、ObsItemの場合はObsItemのインスタンスからschemaを取得
 if(schema[prop]&&schema[prop].type&&schema[prop].type.indexOf('[]')>-1){ //Bindingにおいて比較的頻繁に使われるので、高速化も検討する
 return true;}return false;}}; // =============================
@@ -5450,7 +5533,7 @@ ary[i]=ary[i]&&_typeof(ary[i])==='object'?ary[i]&&ary[i].valueOf&&ary[i].valueOf
 	 * @returns {Boolean} type:'enum'指定のプロパティに代入可能か
 	 */function isEnumValue(v,enumValue){if(isStrictNaN(v)){ // NaN の時は、NaN===NaNにならない(inArrayでも判定できない)ので、enumValueの中身を見て判定する
 for(var i=0,l=enumValue.length;i<l;i++){if(isStrictNaN(enumValue[i])){return true;}}return false;}return v===null||$.inArray(v,enumValue)>-1;} /**
-	 * データモデルのディスクリプタとして正しいオブジェクトかどうかチェックする。 正しくない場合はエラーを投げる。
+	 * データモデルのディスクリプタとして正しいオブジェクト���どうかチェックする。 正しくない場合はエラーを投げる。
 	 *
 	 * @private
 	 * @param {Object} descriptor オブジェクト
@@ -5543,7 +5626,7 @@ pushErrorReason(SCHEMA_ERR_DETAIL_TYPE_CONSTRAINT,schemaProp,p,typeObj.elmType);
 pushErrorReason(SCHEMA_ERR_DETAIL_INVALID_CONSTRAINT_NOTNULL_NOTEMPTY,schemaProp,p);}else if(isId&&!val){ // id項目にnotEmpty: false が指定されていたらエラー
 pushErrorReason(SCHEMA_ERR_DETAIL_CONSTRAINT_CONFLICT_ID,schemaProp,p,val);}break;default: // type:'string'以外の項目にnotEmptyが指定されていたらエラー
 pushErrorReason(SCHEMA_ERR_DETAIL_TYPE_CONSTRAINT,schemaProp,p,typeObj.elmType);}break;case 'pattern':switch(typeObj.elmType){case 'string':if($.type(val)!=='regexp'){ // patternにRegExpオブジェクト以外のものが指定されていたらエラー
-pushErrorReason(SCHEMA_ERR_DETAIL_INVALID_CONSTRAINT_PATTERN,schemaProp,p);}break;default: // type:'string'以外の項目にpatterが指定されていた���エラー
+pushErrorReason(SCHEMA_ERR_DETAIL_INVALID_CONSTRAINT_PATTERN,schemaProp,p);}break;default: // type:'string'以外の項目にpatterが指定されていたらエラー
 pushErrorReason(SCHEMA_ERR_DETAIL_TYPE_CONSTRAINT,schemaProp,p,typeObj.elmType);}break;}} // constraintの中身に矛盾がないかどうかチェック
 if(constraint.notEmpty&&constraint.maxLength===0){ // notNullなのにmanLengthが0
 pushErrorReason(SCHEMA_ERR_DETAIL_CONSTRAINT_CONFLICT,schemaProp,'notEmpty','maxLength');}if(constraint.min!=null&&constraint.max!=null&&constraint.min>constraint.max){ // min > max
@@ -5997,7 +6080,7 @@ ev.props[propName]={oldValue:oldValue,newValue:getValue(item,propName)};item.dis
 		 */this.models={}; /**
 		 * データモデルマネージャ名
 		 * <p>
-		 * <a href="h5.core.data.html#createManager">h5.core.data.createManager()</a>の第一引数に指定���た値が格納されます。
+		 * <a href="h5.core.data.html#createManager">h5.core.data.createManager()</a>の第一引数に指定した値が格納されます。
 		 * </p>
 		 *
 		 * @since 1.1.0
@@ -6122,7 +6205,7 @@ var firstCRLog=getFirstCRLog(itemLogs,i);if(logType===UPDATE_LOG_TYPE_CREATE){ /
 //これをイベントで判別可能にするため、remove->createだった場合はcreatedではなくrecreatedに入れる。
 //なお、begin->remove->create->remove->create->endのような場合、
 //途中のcreate->removeは（begin-endの外から見ると）無視してよいので、
-//oldItemには「最初のremoveのときのインスタンス」、newItemには「最後のcreateのときのイ���スタンス」が入る。
+//oldItemには「最初のremoveのときのインスタンス」、newItemには「最後のcreateのときのインスタンス」が入る。
 //また、begin->create->remove->create->endの場合は、begin-endの外から見ると"create"扱いにすればよい。
 //なお、createイベントはDataItemからは発火しない。(createはdependプロパティ内でのみ起こる)
 if(firstCRLog&&firstCRLog.type===UPDATE_LOG_TYPE_REMOVE){recreated.push({id:itemId,oldItem:firstCRLog.item,newItem:log.item});}else {created.push(log.item);}}else { //ここに来たら必ずUPDATE_LOG_TYPE_REMOVE
@@ -6296,7 +6379,7 @@ ret.push(storedItem); // 既に存在するオブジェクトの場合は値を�
 var event=itemSetter(storedItem,valueObj,[idKey]);if(!event){ //itemSetterが何も返さなかった = 更新する値が何もない
 continue;}addUpdateChangeLog(this,event);}else {var newItem=new this._itemConstructor(valueObj);this.items[itemId]=newItem;this.size++;actualNewItems.push(newItem);ret.push(newItem);}}if(actualNewItems.length>0){addUpdateLog(this,UPDATE_LOG_TYPE_CREATE,actualNewItems);}if(!isAlreadyInUpdate){ //既存のアイテムが変更されていればアイテムのイベントを上げる
 this._manager.endUpdate();}if(isArray(objOrArray)){return ret;}return ret[0];}, /**
-		 * このモデルのスキーマに違反しないかどうかオブジェクトをチェックします。
+		 * このモデルのスキーマに違反しないかどうかオブジェクトをチェックします���
 		 * <p>
 		 * 第一引数にはチェックしたいオブジェクト、またはチェックしたいオブジェクトの配列を渡してください。
 		 * </p>
@@ -6677,7 +6760,7 @@ var ret=doProcess.apply(this,arguments);this.length=this._src.length;var evAfter
 /**
 	 * コンパイルしようとしたテンプレートが文字列でない
 	 */var ERR_CODE_TEMPLATE_COMPILE_NOT_STRING=7000; /**
-	 * テンプレートID���不正である時に発生するエラー
+	 * テンプレートIDが不正である時に発生するエラー
 	 */var ERR_CODE_TEMPLATE_INVALID_ID=7002; /**
 	 * load()呼び出し時に引数にファイル名またはファイル名の配列が渡されなかった時に発生するエラー
 	 */var ERR_CODE_INVALID_FILE_PATH=7004; /**
@@ -6758,7 +6841,7 @@ var getDeferred=h5.async.deferred; // ==========================================
 		 * @memberOf View
 		 */this.__cachedTemplates={};}$.extend(View.prototype,{ /**
 		 * 指定されたパスのテンプレートファイルを非同期で読み込みキャッシュします。<br>
-		 * このメソッドでは、通信エラー発生時に自動リトライは行いません（ver.1.1.4現在。将来この動作は変更される可能性があります）。
+		 * このメソッドでは、通信エラー発生時に自動リトライは行いません（ver.1.1.4現���。将来この動作は変更される可能性があります）。
 		 *
 		 * @memberOf View
 		 * @name load
@@ -6773,7 +6856,7 @@ var validTemplates=[];var invalidTemplate;for(var i=0,l=resources.length;i<l;i++
 view.register(invalidTemplate.id,invalidTemplate.content);}catch(e){ // 登録でエラーが発生したらrejectする
 // detailにエラーが発生した時のリソースのurlとpathを追加する
 e.detail.url=resources[i].url;e.detail.path=resources[i].path;return dfd.reject(e);}} // 全てvalidならすべてのテンプレートを登録
-for(var i=0,l=validTemplates.length;i<l;i++){view.register(validTemplates[i].id,validTemplates[i].content);} // TODO doneハン���ラに渡す引数を作成
+for(var i=0,l=validTemplates.length;i<l;i++){view.register(validTemplates[i].id,validTemplates[i].content);} // TODO doneハンドラに渡す引数を作成
 dfd.resolve();},function(e){fwLogger.error(e.message);dfd.reject(e);});return dfd.promise();}, /**
 		 * Viewインスタンスに登録されている、利用可能なテンプレートのIDの配列を返します。
 		 *
@@ -6970,7 +7053,7 @@ var contextUid=0; /** viewUidカウンタ */var viewUid=0; /** bindUidカウン�
 //  ビュー -> ソースはbindingインスタンス単位ではなく、グローバルに管理（ビュー自体が実質シングルトンなので）。
 //(3)loop-contextの各要素と対応する（要素ごとの）ビュー：
 //  binding._loopElementsMap[viewUid] = loopElementsArray;
-//  loopElementsArrayのi番目にはビューのノードの配列が入っていて���ソース配列のi番目と対応。
+//  loopElementsArrayのi番目にはビューのノードの配列が入っていて、ソース配列のi番目と対応。
 /**
 	 * ビュー（viewUid） -> ソースオブジェクト のマップ。many:1。キーはviewUid、値はソースオブジェクト。
 	 */var viewToSrcMap={}; // =============================
@@ -7014,7 +7097,7 @@ var contextElem=$(candidateContextElems[j])[0];var contextParent=contextElem.par
 if(obj&&obj.addEventListener&&obj.getModel&&!isArray(obj)&&!h5.core.data.isObservableArray(obj)||h5.core.data.isObservableItem(obj)){return true;}return false;}function addViewUid(rootNodes,viewUid){for(var i=0,len=rootNodes.length;i<len;i++){var n=rootNodes[i];if(n.nodeType===NODE_TYPE_ELEMENT){setElemAttribute(n,DATA_H5_DYN_VID,viewUid);}}} /**
 	 * data-loop-contextによるループバインドを行う。（applyBindingの中からのみ呼ばれる）
 	 *
-	 * @param {Binding} binding バインデ���ングインスタンス
+	 * @param {Binding} binding バインディングインスタンス
 	 * @param {Node|Node[]} rootNodes
 	 *            データコンテキストを持つルートノード、またはルートノードの配列（テキストノードやコメントノードなどELEMENT以外が含まれる場合も有る）
 	 * @param {Object} context データコンテキスト
@@ -7059,7 +7142,7 @@ addViewUid(rootNodes,viewUid);binding._addBindingEntry(context,rootNodes,viewUid
 var isItem=isObservableItem(context);if(isItem&&!binding._isWatching(context)){ //まだこのバインディングが監視していないオブジェクトの場合は監視を始める。
 //ソースデータコンテキストから対応するすべてのビューを知ることができるので、
 //ハンドラは1アイテムにつき1つバインドすれば十分。
-var changeListener=function changeListener(event){binding._observableItem_changeListener(event);};binding._listeners[binding._getContextIndex(context)]=changeListener;context.addEventListener('change',changeListener);} //自分のコンテキストに属しているバインディング対象要素を探す
+var changeListener=function changeListener(event){binding._observableItem_changeListener(event);};binding._listeners[binding._getContextIndex(context)]=changeListener;context.addEventListener('change',changeListener);} //自分のコンテキストに属し���いるバインディング対象要素を探す
 //（rootElement自体がバインド対象になっている場合もある）
 var $bindElements=$getBindElementsInContext(rootNodes,isMultiRoot); //自コンテキストに属する各要素のデータバインドを実行
 $bindElements.each(function(){doBind(this,context,isItem);}); //ネストした子data-context, data-loop-contextのデータバインドを実行
@@ -7103,7 +7186,7 @@ removeEnd=removePos+methodArgs[1];} //指定されたインデックスに対応
 for(;removePos<removeEnd;removePos++){var nodesPerIndex=loopNodes[removePos]; //配列がスパースである場合やsplice()で実際の要素数以上の個数を削除しようとしている場合、
 //ループノードがない場合が考えられるのでチェックする
 if(nodesPerIndex){removeDomNodes(binding,parent,nodesPerIndex);}} //まず、削除のみを行う
-loopNodes.splice(startPos,methodArgs[1]);if(methodArgsLen<=2){ //追加する要素がなければ削除だけ行って終了
+loopNodes.splice(startPos,methodArgs[1]);if(methodArgsLen<=2){ //追加���る要素がなければ削除だけ行って終了
 return;}var insertionMarkerNode;var loopNodesLen=loopNodes.length;if(loopNodesLen===0||startPos===0){ //全ての要素が削除された場合、またはstartが0の場合は先頭に追加する
 //全要素が削除されている場合firstChildはnullになっているはず
 insertionMarkerNode=parent.firstChild;}else if(startPos>=loopNodesLen){ //startPosがloopNodesの長さより大きい場合はノードは末尾に挿入
@@ -7180,7 +7263,7 @@ clonedSrc.push(originalNode.cloneNode(true));} /**
 		 * @name _srces
 		 * @private
 		 */this._srces=clonedSrc; /**
-		 * loop-contextの各インデックスがもつ要素（配列）を保持。 キー：viewUid、値：配列の配列。
+		 * loop-contextの各インデックスがもつ要���（配列）を保持。 キー：viewUid、値：配列の配列。
 		 * 値は、「あるviewUidのloop-contextのi番目（＝ここが1段目）の要素の配列（＝2段目）」になっている。
 		 *
 		 * @name _loopElementsMap
@@ -7219,7 +7302,7 @@ applyBinding(this,this._targets,this._rootContext,false,true);}$.extend(Binding.
 		 * @since 1.1.0
 		 * @memberOf Binding
 		 * @function
-		 */unbind:function unbind(){ //全てのバ���ンディングを解除
+		 */unbind:function unbind(){ //全てのバインディングを解除
 for(var i=0,len=this._targets.length;i<len;i++){var target=this._targets[i];if(target.nodeType===NODE_TYPE_ELEMENT){ //バインディングを解除
 this._removeBinding(target); //dyn属性削除
 removeElemAttribute(target,DATA_H5_DYN_BIND_ROOT);var cnElems=queryQualifiedElements(target,DATA_H5_DYN_CN,undefined,true);for(var j=0,cnLen=cnElems.length;j<cnLen;j++){removeElemAttribute(cnElems[j],DATA_H5_DYN_CN);}var cxElems=queryQualifiedElements(target,DATA_H5_DYN_CTX,undefined,true);for(var j=0,cxLen=cxElems.length;j<cxLen;j++){removeElemAttribute(cxElems[j],DATA_H5_DYN_CTX);}}} //ビューとこのBindingインスタンスのマップを削除
@@ -7450,7 +7533,7 @@ return val==null||isStrictNaN(val)||typeof val==='number'||!isStrict&&(val insta
 // 文字列の場合は、[±数字]で構成されている文字列ならOKにする
 // ※ parseIntよりも厳しいチェックにしている。"12px"、"12.3"、[12,3] はいずれもparseIntできるが、ここではNG。
 return val==null||typeof val==='number'&&parseInt(val)===val||!isStrict&&(val instanceof Number&&parseInt(val)===parseFloat(val)||(typeof val==='string'||val instanceof String)&&!!val.match(/^[+\-]{0,1}[0-9]+$/));} /**
-	 * type:'string' 指定のプロパティに代入でき���かのチェック
+	 * type:'string' 指定のプロパティに代入できるかのチェック
 	 *
 	 * @private
 	 * @param {Any} val 判定する値
@@ -7582,7 +7665,7 @@ var name=ev.name;if(ev.isValid){this.validProperties.push(name);this.validCount+
 		 *     name: 'name',              // プロパティ名
 		 *     value: 101,                // バリデート対象の値
 		 *     violation: [{              // 違反理由オブジェクトの配列
-		 *       ruleName: 'max',  // バリデートを行ったルール
+		 *       ruleName: 'max',  // バリデートを行ったル���ル
 		 *       ruleValue: {max:100, inclusive: true},  // バリデート関数に渡されたパラメータ
 		 *       reason: // 非同期バリデートのみ。非同期バリデート関数が返したプロミスのfailハンドラに渡された引数リスト。同期の場合は常にnull
 		 *     }]
@@ -7738,7 +7821,7 @@ return value!=null&&value!=='';}, /**
 		 * 値がnullまたはundefinedの場合はtrueを返します。
 		 * </p>
 		 * <p>
-		 * 値が数値型でない場合はfalseを返します
+		 * 値が数値���でない場合はfalseを返します
 		 * </p>
 		 *
 		 * @param {Any} value 判定する値
@@ -7899,7 +7982,7 @@ var valueSize=0;for(var p in value){valueSize++;}return min<=valueSize&&valueSiz
 		 * また、 グループとそのグループ内のプロパティについてのvalidateに対応しています。
 		 * </p>
 		 * <p>
-		 * グループとは、第1引数のオブジェクトの中に、オブジェクトを値として持つプロパティがある場合、それをグループと言います。
+		 * グループとは、第1引数のオブ���ェクトの中に、オブジェクトを値として持つプロパティがある場合、それをグループと言います。
 		 * そのグループ単位でのバリデートも行い、さらにグループ内のプロパティについてのバリデートを行います。
 		 * </p>
 		 * <p>
@@ -8084,7 +8167,7 @@ this._rule[prop]=propRule;}}, /**
 		 */enableRule:function enableRule(name){var names=wrapInArray(name);for(var i=0,l=names.length;i<l;i++){var index=$.inArray(names[i],this._disableProperties);if(index!==-1){this._disableProperties.splice(index,1);}}}, /**
 		 * パラメータのバリデートを行う
 		 * <p>
-		 * 第1引数にはバリデート対象となるオブジェクト、第2引数には第1引数のオブジェクトのうち、バリデートを行うキー名(複数の場合は配列)を指定します。
+		 * 第1引数にはバリデート対象となるオ���ジェクト、第2引数には第1引数のオブジェクトのうち、バリデートを行うキー名(複数の場合は配列)を指定します。
 		 * </p>
 		 * <p>
 		 * 第2引数を省略した場合は第1引数のオブジェクトが持つすべてのキーがバリデート対象になります。
@@ -8179,7 +8262,7 @@ defineRule(DEFAULT_RULE_NAME_REQUIRED,rule.required,null,51);defineRule(DEFAULT_
 	 */var CLASS_SKIN='skin'; /**
 	 * 一番外側にあるVML要素のクラス名
 	 */var CLASS_VML_ROOT='vml-root'; /**
-	 * VMLのスタ���ル定義要素(style要素)のid
+	 * VMLのスタイル定義要素(style要素)のid
 	 */var ID_VML_STYLE='h5-vmlstyle'; /**
 	 * メッセージに要素に表示する文字列のフォーマット
 	 */var FORMAT_THROBBER_MESSAGE_AREA='<span class="'+CLASS_INDICATOR_THROBBER+'"></span><span class="'+CLASS_INDICATOR_MESSAGE+'" {0}>{1}</span>'; /**
@@ -8291,7 +8374,7 @@ for(var i=0;i<len;i++){if(prefixes[i]+propCamel in div.style){return true;}}retu
 	 */function calculateLineCoords(size,line){var positions=[];var centerPos=size/2;var radius=size*0.8/2;var eachRadian=360/line*Math.PI/180;for(var j=1;j<=line;j++){var rad=eachRadian*j;var cosRad=Math.cos(rad),sinRad=Math.sin(rad);positions.push({from:{x:centerPos+radius/2*cosRad,y:centerPos+radius/2*sinRad},to:{x:centerPos+radius*cosRad,y:centerPos+radius*sinRad}});}return positions;} /**
 	 * 任意要素のスクロールサイズ(scrollWidth/Height：見た目でなくコンテンツ全体のサイズ)を取得します。
 	 * IE6は内包する要素の方が小さい場合にscrollサイズがclientサイズより小さくなってしまうバグがあります（本来はscroll===client）。
-	 * そこで、IE6の場���はscrollとclientのうち大きい方のサイズを返します。<br>
+	 * そこで、IE6の場合はscrollとclientのうち大きい方のサイズを返します。<br>
 	 * また、scrollW/Hは整数を返しますが、内部的にはサイズが小数になっている場合があります。Chrome22, Firefox20,
 	 * Opera12ではscrollサイズをセットしても問題ありませんが、IEの場合
 	 * (内部サイズが小数のときに)scrollW/Hの大きさでオーバーレイのサイズを設定すると意図しないスクロールバーが出てしまう場合があります。
@@ -8478,7 +8561,7 @@ $elem.each(function(i){for(var p in props[i]){this.style[p]='';}});callback();re
 	 */function fadeIn($elem,time,callback){ // 現在のopacityを取得
 var opacities=[];$elem.each(function(){var opacity=parseFloat(getComputedStyleValue(this,'opacity'));opacities.push({opacity:opacity});}); // opacityを0にして、display:blockにする
 $elem.css({opacity:0,display:'block'});animate(opacities,$elem,time,callback);} /**
-	 * opacityを現在の値から、0まで���ニメーションします
+	 * opacityを現在の値から、0までアニメーションします
 	 *
 	 * @param {jQuery} $elem fadeOutさせる要素
 	 * @param {Number} time アニメーションに掛ける時間(ms)
@@ -8528,7 +8611,7 @@ this._runId=setTimeout(function(){that._run.call(that);},perMills);}},setPercent
 	 * @param {Number} [option.percent] スロバーの中央に表示する数値。0～100で指定する (デフォルト:未指定)
 	 * @param {Boolean} [option.block] 画面を操作できないようオーバーレイ表示するか (true:する/false:しない) (デフォルト:true)
 	 * @param {Number} [option.fadeIn] インジケータをフェードで表示する場合、表示までの時間をミリ秒(ms)で指定する (デフォルト:フェードしない)
-	 * @param {Number} [option.fadeOut] インジケータをフェードで非表示にする場合、非表示までの時間をミリ���(ms)で指定する (デフォルト:しない)
+	 * @param {Number} [option.fadeOut] インジケータをフェードで非表示にする場合、非表示までの時間をミリ秒(ms)で指定する (デフォルト:しない)
 	 * @param {Promise|Promise[]} [option.promises] Promiseオブジェクト (Promiseの状態に合わせて自動でインジケータの非表示を行う)
 	 * @param {String} [option.theme] テーマクラス名 (インジケータのにスタイル定義の基点となるクラス名 (デフォルト:'a')
 	 * @param {String} [option.throbber.lines] スロバーの線の本数 (デフォルト:12)
@@ -8745,7 +8828,7 @@ this._resizeEventTimerId=setTimeout(function(){updateMessageArea();},1000);}}}; 
 	 * @param {Number} [param.fadeIn] インジケータをフェードで表示する場合、表示までの時間をミリ秒(ms)で指定する (デフォルト:フェードしない)
 	 * @param {Number} [param.fadeOut] インジケータをフェードで非表示にする場合、非表示までの時間をミリ秒(ms)で指定する (デフォルト:しない)
 	 * @param {Promise|Promise[]} [param.promises] Promiseオブジェクト (Promiseの状態に合わせて自動でインジケータの非表示を行う)
-	 * @param {String} [param.theme] テーマクラス名 (インジケータのにスタイル定義の基点となるクラス名 (デフォルト:'a')
+	 * @param {String} [param.theme] テーマクラス名 (インジケータのにスタイル定義の基点となるク���ス名 (デフォルト:'a')
 	 * @param {String} [param.throbber.lines] スロバーの線の本数 (デフォルト:12)
 	 * @param {String} [param.throbber.roundTime] スロバーの白線が1周するまでの時間(ms)
 	 *            (このオプションはCSS3Animationを未サポートブラウザのみ有効) (デフォルト:1000)
@@ -8854,7 +8937,7 @@ var errMsgMap={};errMsgMap[ERR_CODE_INVALID_TYPE]='引数{0}が不正です。�
 	 */var dynamicControllerInstanceMap={}; /**
 	 * 初期化パラメータのマップ
 	 * <p>
-	 * キー：ページID、値：初期化パラメータの配列
+	 * キー：ページID、値：初期化���ラメータの配列
 	 *
 	 * @type Object
 	 */var initParamMap={}; /**
@@ -8985,7 +9068,7 @@ $(context.event.target).trigger(EV_NAME_H5_JQM_PAGE_HIDE,{nextPage:$.mobile.acti
 		 * @memberOf JQMController
 		 */'{rootElement} pagehide':function rootElementPagehide(context){if(!hideEventFired){$(context.event.target).trigger(EV_NAME_H5_JQM_PAGE_HIDE,{nextPage:context.evArg.nextPage});}hideEventFired=false;var id=context.event.target.id;changeListenerState(id,false);this.removeCSS(id);}, /**
 		 * コントローラでもページ表示時のイベントを拾えるようにするため、 JQMのpageshowイベントと同じタイミングで、JQMマネージャが管理しているコントローラのルート要素に対して
-		 * h5jqmpageshowイベントをトリガし���す
+		 * h5jqmpageshowイベントをトリガします
 		 *
 		 * @param {Object} context コンテキスト
 		 * @memberOf JQMController
@@ -9038,7 +9121,7 @@ return $.inArray(href,fromPageCSS)!==-1&&$.inArray(href,toPageCSS)===-1;}).remov
 	 * jQuery Mobile専用コントローラマネージャ (JQM Manager)
 	 * <p>
 	 * 現在表示されているページ(アクティブページ)に指定したコントローラとCSSファイルを読み込むという定義を行うことにより、 jQuery
-	 * Mobile特有のページのライフサイクル(DOM生成や破棄)にあわせて、ページに対して
+	 * Mobile特有のページのライフサイクル(DOM生成や破棄)���あわせて、ページに対して
 	 * <ul>
 	 * <li>コントローラで定義したハンドラ</li>
 	 * <li>スタイル(CSSファイル)</li>
@@ -9068,7 +9151,7 @@ shouldHandlePagecreateEvent=compareVersion($.mobile.version,'1.4')>=0; // 初期
 $(document).one('pageshow',function(){showEventFiredBeforeReady=true;});$(function(){jqmControllerInstance=h5internal.core.controllerInternal('body',jqmController,null,{managed:false});bindToActivePage();});}, /**
 				 * jQuery Mobile用hifiveコントローラマネージャにコントローラを登録します。
 				 * <p>
-				 * 「data-role="page"」ま���は「data-role="dialog"」の属性が指定された要素でかつ、
+				 * 「data-role="page"」または「data-role="dialog"」の属性が指定された要素でかつ、
 				 * idが第1引数で指定されたものに一致する要素に対してコントローラを登録します。
 				 * <p>
 				 * 1つのページに複数コントローラを登録することもできます。<br>
@@ -9226,7 +9309,7 @@ _setting:{}, /**
 		 * </p>
 		 *
 		 * @memberOf h5.ui.validation.MessageOutputController
-		 * @param {string} wrapper メッセージをラップするタグまたはタグ生成文字列
+		 * @param {string} wrapper メッセージをラップする���グまたはタグ生成文字列
 		 */setWrapper:function setWrapper(wrapper){this._wrapper=wrapper;}, /**
 		 * メッセージ出力先の設定を適用する
 		 * <p>
@@ -9367,7 +9450,7 @@ validationResult.addEventListener('validate',this.own(function(ev){if(!ev.isVali
 		 */_setSetting:function _setSetting(setting){this._setting=setting;}, /**
 		 * バリデート時に呼ばれる
 		 * <p>
-		 * {@link ValidationResult}から、各要素にクラスを設定する
+		 * {@link ValidationResult}から、各要素にクラスを設定���る
 		 * </p>
 		 *
 		 * @private
@@ -9785,7 +9868,7 @@ var property=setting.property;var messageSetting={};for(var p in property){messa
 		 */_setSetting:function _setSetting(setting){this._setting=setting;}, /**
 		 * バリデート時に呼ばれる
 		 * <p>
-		 * 非同期バリデートがある場合、該当要素に対してインジケータを表示する
+		 * 非���期バリデートがある場合、該当要素に対してインジケータを表示する
 		 * </p>
 		 *
 		 * @private
@@ -9867,7 +9950,7 @@ var defaultRuleCreators={requiredRuleCreator:function requiredRuleCreator(inputE
 		 */_validationLogic:h5.validation.FormValidationLogic, /**
 		 * nameをキーに非同期バリデート結果を待つValidationResultを持つマップ
 		 * <p>
-		 * 待機中のバリデート結果を保持することで、同じプロパティに対して続けてバリデートが掛けられたときに待機中のものを中断して新しい結果を待つようにしている。
+		 * 待機中のバリデート結果を保持することで、同じプロパティに対して続けてバリデートが掛けられたときに待機中のものを中断して新しい���果を待つようにしている。
 		 * </p>
 		 *
 		 * @memberOf h5.ui.FormController
@@ -10213,7 +10296,7 @@ if(!this.isInit){this.initPromise.done(this.own(function(){this.addOutput(plugin
 		 * @memberOf h5.ui.FormController
 		 * @param {string|string[]} names 指定した場合、指定したnameのものだけを集約
 		 * @returns {Object} フォーム部品集約オブジェクト
-		 */getValue:function getValue(names){names=names&&(!isArray(names)?[names]:names);var $elements=$(this._getElements());var $groups=$(this._getInputGroupElements());var propertySetting=this._setting&&this._setting.property||{};var ret={};var elementNames=[];var rootElement=this.rootElement;$elements.each(function(){var name=this.name;elementNames.push(name);var currentGroup=ret; // グループに属していればグループ���を取得
+		 */getValue:function getValue(names){names=names&&(!isArray(names)?[names]:names);var $elements=$(this._getElements());var $groups=$(this._getInputGroupElements());var propertySetting=this._setting&&this._setting.property||{};var ret={};var elementNames=[];var rootElement=this.rootElement;$elements.each(function(){var name=this.name;elementNames.push(name);var currentGroup=ret; // グループに属していればグループ名を取得
 if($groups.find(this).length){var $group=$(this).closest('[data-'+DATA_INPUTGROUP_CONTAINER+']');var groupName=$group.data(DATA_INPUTGROUP_CONTAINER);}if(groupName){elementNames.push(groupName); // グループコンテナに属するエレメントの場合
 if(names&&$.inArray(name,names)===-1&&$.inArray(groupName,names)===-1){ // nameもgroupNameもnamesに入っていなければ集約対象外
 return;} // グループ単位でオブジェクトを作る
@@ -10271,7 +10354,7 @@ this._callPluginValidateEvent(PLUGIN_EVENT_VALIDATE,result);return result;}, /**
 		 * @param {string} pluginName プラグイン名
 		 * @returns {Controller}
 		 */getOutput:function getOutput(pluginName){return this._plugins[pluginName];}, /*
-		 * フォーム部品でのイベント発生時にプラグインを呼び出すイベントハンドラ設定
+		 * フォーム部���でのイベント発生時にプラグインを呼び出すイベントハンドラ設定
 		 */'{rootElement} focusin':function rootElementFocusin(ctx){this._pluginElementEventHandler(ctx,PLUGIN_EVENT_FOCUS);},'{rootElement} focusout':function rootElementFocusout(ctx){this._pluginElementEventHandler(ctx,PLUGIN_EVENT_BLUR);},'{rootElement} keyup':function rootElementKeyup(ctx){this._pluginElementEventHandler(ctx,PLUGIN_EVENT_KEYUP);},'{rootElement} change':function rootElementChange(ctx){this._pluginElementEventHandler(ctx,PLUGIN_EVENT_CHANGE);},'{rootElement} click':function rootElementClick(ctx){this._pluginElementEventHandler(ctx,PLUGIN_EVENT_CLICK);}, /**
 		 * このコントローラが管理するフォームに属するフォーム部品またはフォーム部品グループ要素の中で指定した名前に一致する要素を取得
 		 *
@@ -10610,7 +10693,7 @@ switch(e.code){case e.DATABASE_ERR:msg=SQL_ERR_DATABASE;break;case e.CONSTRAINT_
 	 * txeがTransactionalExecutor型ではない場合、例外をスローします。<br>
 	 * null,undefinedの場合は例外をスローしません。
 	 */function isTransactionalExecutor(funcName,txe){if(txe!=undefined&&!(txe instanceof TransactionalExecutor)){throwFwError(ERR_CODE_INVALID_TRANSACTION_TYPE,funcName);}} /**
-	 * 条件を保持するオブジェクトから、SQLのプレース���ルダを含むWHERE文とパラメータの配列を生成します
+	 * 条件を保持するオブジェクトから、SQLのプレースホルダを含むWHERE文とパラメータの配列を生成します
 	 */function setConditionAndParameters(whereObj,conditions,parameters){if($.isPlainObject(whereObj)){for(var prop in whereObj){var params=$.trim(prop).replace(/ +/g,' ').split(' ');var param=[];if(params[0]===""){throwFwError(ERR_CODE_INVALID_COLUMN_NAME_IN_WHERE);}else if(params.length===1){param.push(params[0]);param.push('=');param.push('?');}else if(!/^(<=|<|>=|>|=|!=|like)$/i.test(params[1])){throwFwError(ERR_CODE_INVALID_OPERATOR);}else if(params.length===3&&/^like$/i.test(params[1])){param.push(params[0]);param.push(params[1]);param.push('?');param.push('ESCAPE');param.push('\"'+params[2]+'\"');}else {param.push(params[0]);param.push(params[1]);param.push('?');}conditions.push(param.join(' '));parameters.push(whereObj[prop]);}}} /**
 	 * Web SQL Databaseクラス
 	 *
@@ -11401,7 +11484,7 @@ isSupported:window.localStorage?function(){try{var checkKey='__H5_WEB_STORAGE_CH
 	 */var NOT_RESHOWABLE_MESSAGE='この画面は再表示できません。'; /**
 	 * メインシーンコンテナのURL履歴保持方法列挙体
 	 * <p>
-	 * メインシーンコンテナURL履歴保持方法です。何れかをh5.settings.scene.urlHistoryMode���指定します。
+	 * メインシーンコンテナURL履歴保持方法です。何れかをh5.settings.scene.urlHistoryModeに指定します。
 	 * </p>
 	 * <dl>
 	 * <dt>h5.scene.urlHistoryMode.HASH</dt>
@@ -11438,7 +11521,7 @@ var REMOTE_METHOD_INVOCATION='__h5__RMI';var REMOTE_METHOD_INVOCATION_RESULT='__
 // =============================
 var fwLogger=h5.log.createLogger('h5.scene'); /* del begin */ /**
 	 * 各エラーコードに対応するメッセージ
-	 */var errMsgMap={};errMsgMap[ERR_CODE_SCAN_MULTIPLE_ELEMENT]='h5.scene.scan() の第1引数に複数要素は指定できません。単一要素で指定してください。';errMsgMap[ERR_CODE_CURRENT_SCENE_NOT_FOUND]='カレントとなるシーン要素が見つかりません。';errMsgMap[ERR_CODE_TARGET_CONTAINER_NOT_FOUND]='ロードしたHTMLに、指定されたコンテナ要素が見つかりません。to:{0} container:{1}';errMsgMap[ERR_CODE_MAIN_CONTAINER_ALREADY_CREATED]='メインシーンコンテナはすでに生成されているため、生成できません。';errMsgMap[ERR_CODE_CHANGE_SCENE_TO_IS_NOT_STRING]='シーン遷移先は文字列で指定してください。to:{0}';errMsgMap[ERR_CODE_CHANGE_SCENE_HASH_IN_TO]='シーン遷移先にハッシュは指定できません。to:{0}';errMsgMap[ERR_CODE_MAIN_CHANGE_SCENE_TO_IS_CONTROLLER]='現在、メインシーンコンテナのシーン遷移先にコントローラーは指定できません。to:{0}';errMsgMap[ERR_CODE_CONTAINER_ALREADY_CREATED]='対象要素ですでにシーンコンテナが生成されているため、生成できません。';errMsgMap[ERR_CODE_HTML_LOAD_FAILED]='シーン遷移先HTMLのロードに失敗しました。to:{0}';errMsgMap[ERR_CODE_CONTAINER_CONTROLLER_NOT_FOUND]='要素にコンテナ生成済みマークがあるにも関わらず所定のコントローラーがバインドされていません。';errMsgMap[ERR_CODE_URL_LENGTH_OVER]='遷移先URLが設定された最大長を超過しました。長さ:{0} 最大長:{1}';errMsgMap[ERR_CODE_HISTORY_API_NOT_AVAILABLE]='HistoryAPIが使用できない環境では処理できない設定になっています。';errMsgMap[ERR_CODE_URL_HISTORY_MODE_INVALID]='RouterのURL履歴保持方法指定が不正です。urlHistoryMode:{0}'; // メッセージの登録
+	 */var errMsgMap={};errMsgMap[ERR_CODE_SCAN_MULTIPLE_ELEMENT]='h5.scene.scan() の第1引数に複数要素は指定できません。単一要素で指定してください。';errMsgMap[ERR_CODE_CURRENT_SCENE_NOT_FOUND]='カレントとなるシーン要素が見つかりません。';errMsgMap[ERR_CODE_TARGET_CONTAINER_NOT_FOUND]='ロードしたHTMLに、指定されたコンテナ要素が見つかりません。to:{0} container:{1}';errMsgMap[ERR_CODE_MAIN_CONTAINER_ALREADY_CREATED]='メインシーンコンテナはすでに生成されているため、生成できません。';errMsgMap[ERR_CODE_CHANGE_SCENE_TO_IS_NOT_STRING]='シーン遷移先は文字列で指定してください。to:{0}';errMsgMap[ERR_CODE_CHANGE_SCENE_HASH_IN_TO]='シーン遷移先にハッシュは指定できません。to:{0}';errMsgMap[ERR_CODE_MAIN_CHANGE_SCENE_TO_IS_CONTROLLER]='現在、メインシーンコンテナのシーン遷移先にコントローラーは指定できません。to:{0}';errMsgMap[ERR_CODE_CONTAINER_ALREADY_CREATED]='対象要素ですでにシーンコンテナが生成されているため、生成できません。';errMsgMap[ERR_CODE_HTML_LOAD_FAILED]='シーン遷移先HTMLのロードに失敗しました。to:{0}';errMsgMap[ERR_CODE_CONTAINER_CONTROLLER_NOT_FOUND]='要素にコンテナ生成済みマークがあるにも関わらず所定のコントローラーがバインドされていません。';errMsgMap[ERR_CODE_URL_LENGTH_OVER]='遷移先URLが設定された最大長を超過しました。長さ:{0} 最大長:{1}';errMsgMap[ERR_CODE_HISTORY_API_NOT_AVAILABLE]='HistoryAPIが使用できない環境では処理できない設定になっています。';errMsgMap[ERR_CODE_URL_HISTORY_MODE_INVALID]='RouterのURL履歴保持方法指���が不正です。urlHistoryMode:{0}'; // メッセージの登録
 addFwErrorCodeMap(errMsgMap); /* del end */ // =========================================================================
 //
 // Cache
@@ -11484,7 +11567,7 @@ var isDisposing=h5internal.core.isDisposing; // ================================
 // Functions
 // =============================
 /**
-	 * デフォルト���ーンのシーンコントローラを取得する。
+	 * デフォルトシーンのシーンコントローラを取得する。
 	 *
 	 * @private
 	 * @returns controller
@@ -11644,7 +11727,7 @@ if(!sceneElm.is('['+DATA_H5_CONTROLLER+']')){markBoundController(sceneElm,DummyC
 if(!isFound){throwFwError(ERR_CODE_CURRENT_SCENE_NOT_FOUND);} // TODO(鈴木) カレントとなるシーン要素のみscan
 var promise=scan(defaultSceneElm.get(0),controllerName,args); // TODO(鈴木) デフォルトコントローラーがバインド・返却されていなければscanの結果を使用する
 if(!isResolved(dfd)){promise.done(function(controller){dfd.resolve(controller);});}return dfd.promise();} /**
-	 * コントローラーファイルのロードとコントローラーの生成
+	 * コントローラ���ファイルのロードとコントローラーの生成
 	 *
 	 * @private
 	 * @param name
@@ -11761,7 +11844,7 @@ if(option.routes){self._routes=self._routes.concat(option.routes);}return self;}
 		 * @private
 		 * @memberOf Router
 		 */urlHistoryActualMode:null, /**
-		 * URL変更なしでの対応関数実行 URL文字列保���用
+		 * URL変更なしでの対応関数実行 URL文字列保持用
 		 *
 		 * @private
 		 * @memberOf Router
@@ -11826,7 +11909,7 @@ location.reload();}else if(option.replaceHistory){location.replace(result);}else
 		 * @param {String} url
 		 * @param {Object} [option]
 		 * @param {Boolean} [option.writeBack=false] チェック結果詳細を仮引数のオブジェクトに書き込む場合にtrue。
-		 *            ※現時点では使用していない。将来的にメソッドを公開した場合での使用を想定。
+		 *            ※現時点では使用していない。将来的にメソッドを公開した場合で���使用を想定。
 		 * @param {Boolean} [option.throwOnError=false] チェックエラー時に例外をスローする場合にtrue。dev版のみ有効。min版では無効。
 		 * @returns {Boolean} チェック結果
 		 */_checkUrlLength:function _checkUrlLength(url,option){option=option||{};if(this._urlMaxLength==null){return true;}var urlHelper=new UrlHelper(url);if(urlHelper.protocol){ // プロトコル指定ありの場合はそのままチェック。
@@ -11986,7 +12069,7 @@ setTimeout(function(){dfd.resolve(remote);},100);return dfd.promise();} // TODO(
 	 * @param html
 	 * @returns {String}
 	 */function extractBody(html){ // TODO(鈴木) この場合HTMLコメントは消える。HTMLコメント内にbodyタグがない前提であれば楽だが。。
-// HTMLコメントも保存するよう実装すべき���？
+// HTMLコメントも保存するよう実装すべきか？
 var match=html.replace(htmlCommentRegexp,'').match(bodyTagRegExp);if(match){return '<div '+DATA_H5_DYN_DUMMY_BODY+' '+match[1]+'>'+match[2]+'</div>';}return html;} /**
 	 * 直下先頭要素に'data-h5-default-scene'もしくは'data-h5-scene'属性がない場合は、'data-h5-default-scene'のDIV要素で囲む。
 	 * <p>
@@ -12075,7 +12158,7 @@ delete param.to;to=clearParam(to);var urlHelper=new UrlHelper(to);path=urlHelper
 	 */var mainContainer=null; /**
 	 * 再表示不可画面用コントローラー
 	 * <p>
-	 * シーン遷移時シーン間パラメーターをURLに保持しない場合で、ブラウザ履歴等により再表示した場合に表示す���画面。
+	 * シーン遷移時シーン間パラメーターをURLに保持しない場合で、ブラウザ履歴等により再表示した場合に表示する画面。
 	 * </p>
 	 *
 	 * @private
@@ -12201,7 +12284,7 @@ mainContainer=null;}}, /**
 		 *
 		 * @param {String|Object} param 遷移先文字列、または遷移用オプション。
 		 *            <p>
-		 *            遷移先文字列の場合は、HTMLを返却するURLか、コントローラーの__name属性を指定します。<br>
+		 *            遷移先文字列の場合���、HTMLを返却するURLか、コントローラーの__name属性を指定します。<br>
 		 *            遷移用オプションの場合は、以下のプロパティを持ちます。
 		 *            </p>
 		 * @param {String} param.to 遷移先指定。HTMLを返却するURLか、コントローラーの__name属性を指定します。指定必須です。
@@ -12284,7 +12367,7 @@ if(fromElm){disposeAllControllers(fromElm);}var that=this;var args=null;if(param
 // TODO(鈴木) 処理順を以下に変更
 // HTMLロード→(ツリーにはappendせず)DOM生成→属性に基づきコントローラーをロード・バインド
 // →シーンルートとなるコントローラーのDOMを既存と入れ替える
-// (現状はコンテナ以下をそのまま入れている。コンテナ内にDOM的にシーンが複数あるケースは未対応)
+// (���状はコンテナ以下をそのまま入れている。コンテナ内にDOM的にシーンが複数あるケースは未対応)
 if(isString(to)){if(controllerRegexp.test(to)){ // TODO(鈴木) 遷移先指定がコントローラーの__name属性の場合
 loadController(to,$('<div></div>'),args).done(function(toController){that._navigateEnd(toController,param);});}else {var callback=function callback(toElm){ // TODO(鈴木)
 // DATA属性に基づいてコントローラーバインド・コンテナ生成
@@ -12426,7 +12509,307 @@ if(h5.settings.scene.autoInit){init();}}); // =============================
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 
-},{"jquery":4}],3:[function(require,module,exports){
+},{"jquery":9}],4:[function(require,module,exports){
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+function EventEmitter() {
+  this._events = this._events || {};
+  this._maxListeners = this._maxListeners || undefined;
+}
+module.exports = EventEmitter;
+
+// Backwards-compat with node 0.10.x
+EventEmitter.EventEmitter = EventEmitter;
+
+EventEmitter.prototype._events = undefined;
+EventEmitter.prototype._maxListeners = undefined;
+
+// By default EventEmitters will print a warning if more than 10 listeners are
+// added to it. This is a useful default which helps finding memory leaks.
+EventEmitter.defaultMaxListeners = 10;
+
+// Obviously not all Emitters should be limited to 10. This function allows
+// that to be increased. Set to zero for unlimited.
+EventEmitter.prototype.setMaxListeners = function(n) {
+  if (!isNumber(n) || n < 0 || isNaN(n))
+    throw TypeError('n must be a positive number');
+  this._maxListeners = n;
+  return this;
+};
+
+EventEmitter.prototype.emit = function(type) {
+  var er, handler, len, args, i, listeners;
+
+  if (!this._events)
+    this._events = {};
+
+  // If there is no 'error' event listener then throw.
+  if (type === 'error') {
+    if (!this._events.error ||
+        (isObject(this._events.error) && !this._events.error.length)) {
+      er = arguments[1];
+      if (er instanceof Error) {
+        throw er; // Unhandled 'error' event
+      }
+      throw TypeError('Uncaught, unspecified "error" event.');
+    }
+  }
+
+  handler = this._events[type];
+
+  if (isUndefined(handler))
+    return false;
+
+  if (isFunction(handler)) {
+    switch (arguments.length) {
+      // fast cases
+      case 1:
+        handler.call(this);
+        break;
+      case 2:
+        handler.call(this, arguments[1]);
+        break;
+      case 3:
+        handler.call(this, arguments[1], arguments[2]);
+        break;
+      // slower
+      default:
+        args = Array.prototype.slice.call(arguments, 1);
+        handler.apply(this, args);
+    }
+  } else if (isObject(handler)) {
+    args = Array.prototype.slice.call(arguments, 1);
+    listeners = handler.slice();
+    len = listeners.length;
+    for (i = 0; i < len; i++)
+      listeners[i].apply(this, args);
+  }
+
+  return true;
+};
+
+EventEmitter.prototype.addListener = function(type, listener) {
+  var m;
+
+  if (!isFunction(listener))
+    throw TypeError('listener must be a function');
+
+  if (!this._events)
+    this._events = {};
+
+  // To avoid recursion in the case that type === "newListener"! Before
+  // adding it to the listeners, first emit "newListener".
+  if (this._events.newListener)
+    this.emit('newListener', type,
+              isFunction(listener.listener) ?
+              listener.listener : listener);
+
+  if (!this._events[type])
+    // Optimize the case of one listener. Don't need the extra array object.
+    this._events[type] = listener;
+  else if (isObject(this._events[type]))
+    // If we've already got an array, just append.
+    this._events[type].push(listener);
+  else
+    // Adding the second element, need to change to array.
+    this._events[type] = [this._events[type], listener];
+
+  // Check for listener leak
+  if (isObject(this._events[type]) && !this._events[type].warned) {
+    if (!isUndefined(this._maxListeners)) {
+      m = this._maxListeners;
+    } else {
+      m = EventEmitter.defaultMaxListeners;
+    }
+
+    if (m && m > 0 && this._events[type].length > m) {
+      this._events[type].warned = true;
+      console.error('(node) warning: possible EventEmitter memory ' +
+                    'leak detected. %d listeners added. ' +
+                    'Use emitter.setMaxListeners() to increase limit.',
+                    this._events[type].length);
+      if (typeof console.trace === 'function') {
+        // not supported in IE 10
+        console.trace();
+      }
+    }
+  }
+
+  return this;
+};
+
+EventEmitter.prototype.on = EventEmitter.prototype.addListener;
+
+EventEmitter.prototype.once = function(type, listener) {
+  if (!isFunction(listener))
+    throw TypeError('listener must be a function');
+
+  var fired = false;
+
+  function g() {
+    this.removeListener(type, g);
+
+    if (!fired) {
+      fired = true;
+      listener.apply(this, arguments);
+    }
+  }
+
+  g.listener = listener;
+  this.on(type, g);
+
+  return this;
+};
+
+// emits a 'removeListener' event iff the listener was removed
+EventEmitter.prototype.removeListener = function(type, listener) {
+  var list, position, length, i;
+
+  if (!isFunction(listener))
+    throw TypeError('listener must be a function');
+
+  if (!this._events || !this._events[type])
+    return this;
+
+  list = this._events[type];
+  length = list.length;
+  position = -1;
+
+  if (list === listener ||
+      (isFunction(list.listener) && list.listener === listener)) {
+    delete this._events[type];
+    if (this._events.removeListener)
+      this.emit('removeListener', type, listener);
+
+  } else if (isObject(list)) {
+    for (i = length; i-- > 0;) {
+      if (list[i] === listener ||
+          (list[i].listener && list[i].listener === listener)) {
+        position = i;
+        break;
+      }
+    }
+
+    if (position < 0)
+      return this;
+
+    if (list.length === 1) {
+      list.length = 0;
+      delete this._events[type];
+    } else {
+      list.splice(position, 1);
+    }
+
+    if (this._events.removeListener)
+      this.emit('removeListener', type, listener);
+  }
+
+  return this;
+};
+
+EventEmitter.prototype.removeAllListeners = function(type) {
+  var key, listeners;
+
+  if (!this._events)
+    return this;
+
+  // not listening for removeListener, no need to emit
+  if (!this._events.removeListener) {
+    if (arguments.length === 0)
+      this._events = {};
+    else if (this._events[type])
+      delete this._events[type];
+    return this;
+  }
+
+  // emit removeListener for all listeners on all events
+  if (arguments.length === 0) {
+    for (key in this._events) {
+      if (key === 'removeListener') continue;
+      this.removeAllListeners(key);
+    }
+    this.removeAllListeners('removeListener');
+    this._events = {};
+    return this;
+  }
+
+  listeners = this._events[type];
+
+  if (isFunction(listeners)) {
+    this.removeListener(type, listeners);
+  } else if (listeners) {
+    // LIFO order
+    while (listeners.length)
+      this.removeListener(type, listeners[listeners.length - 1]);
+  }
+  delete this._events[type];
+
+  return this;
+};
+
+EventEmitter.prototype.listeners = function(type) {
+  var ret;
+  if (!this._events || !this._events[type])
+    ret = [];
+  else if (isFunction(this._events[type]))
+    ret = [this._events[type]];
+  else
+    ret = this._events[type].slice();
+  return ret;
+};
+
+EventEmitter.prototype.listenerCount = function(type) {
+  if (this._events) {
+    var evlistener = this._events[type];
+
+    if (isFunction(evlistener))
+      return 1;
+    else if (evlistener)
+      return evlistener.length;
+  }
+  return 0;
+};
+
+EventEmitter.listenerCount = function(emitter, type) {
+  return emitter.listenerCount(type);
+};
+
+function isFunction(arg) {
+  return typeof arg === 'function';
+}
+
+function isNumber(arg) {
+  return typeof arg === 'number';
+}
+
+function isObject(arg) {
+  return typeof arg === 'object' && arg !== null;
+}
+
+function isUndefined(arg) {
+  return arg === void 0;
+}
+
+},{}],5:[function(require,module,exports){
 // shim for using process in browser
 
 var process = module.exports = {};
@@ -12522,7 +12905,92 @@ process.chdir = function (dir) {
 };
 process.umask = function() { return 0; };
 
-},{}],4:[function(require,module,exports){
+},{}],6:[function(require,module,exports){
+module.exports = require('./node/index.js');
+
+},{"./node/index.js":8}],7:[function(require,module,exports){
+'use strict';
+
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
+var _get = function get(object, property, receiver) { if (object === null) object = Function.prototype; var desc = Object.getOwnPropertyDescriptor(object, property); if (desc === undefined) { var parent = Object.getPrototypeOf(object); if (parent === null) { return undefined; } else { return get(parent, property, receiver); } } else if ("value" in desc) { return desc.value; } else { var getter = desc.get; if (getter === undefined) { return undefined; } return getter.call(receiver); } };
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+function _possibleConstructorReturn(self, call) { if (!self) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return call && (typeof call === "object" || typeof call === "function") ? call : self; }
+
+function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
+
+(function () {
+  'use strict';
+
+  var EventEmitter = require('events').EventEmitter;
+  var nextFrame = typeof window === 'undefined' ? setImmediate : window.requestAnimationFrame;
+  var cancelFrame = typeof window === 'undefined' ? clearImmediate : window.cancelAnimationFrame;
+  var secondPassed = function secondPassed(current, last) {
+    return Math.floor(current / 1000) !== Math.floor(last / 1000);
+  };
+
+  var Timer = function (_EventEmitter) {
+    _inherits(Timer, _EventEmitter);
+
+    function Timer(current) {
+      _classCallCheck(this, Timer);
+
+      var _this = _possibleConstructorReturn(this, Object.getPrototypeOf(Timer).call(this));
+
+      _this.current = _this._last = _this._pivot = current ? current : 0;
+      _this.loop = function () {
+        var passed = Date.now() - _this._lastStarted;
+        _this.current = _this._pivot + passed;
+        _get(Object.getPrototypeOf(Timer.prototype), 'emit', _this).call(_this, 'frame', { milliseconds: _this.current });
+        //if(Math.floor(this.current / 1000) !== Math.floor(this._last / 1000)){
+        if (secondPassed(_this.current, _this._last)) {
+          _get(Object.getPrototypeOf(Timer.prototype), 'emit', _this).call(_this, 'second', { milliseconds: _this.current });
+        }
+        _this._last = _this.current;
+        _this.timeout = nextFrame(_this.loop, 0);
+      };
+      return _this;
+    }
+
+    _createClass(Timer, [{
+      key: 'reset',
+      value: function reset(offset) {
+        this.stop();
+        this.current = this._last = this._pivot = offset ? offset : 0;
+        _get(Object.getPrototypeOf(Timer.prototype), 'emit', this).call(this, 'reset', { milliseconds: this.current });
+      }
+    }, {
+      key: 'start',
+      value: function start() {
+        this._lastStarted = Date.now();
+        _get(Object.getPrototypeOf(Timer.prototype), 'emit', this).call(this, 'start', { milliseconds: this.current });
+        this.timeout = nextFrame(this.loop, 0);
+      }
+    }, {
+      key: 'stop',
+      value: function stop() {
+        this._pivot = this.current;
+        cancelFrame(this.timeout);
+        _get(Object.getPrototypeOf(Timer.prototype), 'emit', this).call(this, 'stop', { milliseconds: this.current });
+      }
+    }]);
+
+    return Timer;
+  }(EventEmitter);
+
+  module.exports = Timer;
+})();
+
+
+},{"events":4}],8:[function(require,module,exports){
+'use strict';
+
+module.exports = require('./Timer');
+
+
+},{"./Timer":7}],9:[function(require,module,exports){
 /*!
  * jQuery JavaScript Library v2.2.3
  * http://jquery.com/
@@ -22366,10 +22834,10 @@ if ( !noGlobal ) {
 return jQuery;
 }));
 
-},{}],5:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 module.exports = require('./lib/MineSweeper');
 
-},{"./lib/MineSweeper":6}],6:[function(require,module,exports){
+},{"./lib/MineSweeper":11}],11:[function(require,module,exports){
 'use strict';
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
@@ -22625,12 +23093,12 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
 
   module.exports = MineSweeper;
 })();
-},{}],7:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 'use strict';
 
 module.exports = require('react/lib/ReactDOM');
 
-},{"react/lib/ReactDOM":43}],8:[function(require,module,exports){
+},{"react/lib/ReactDOM":48}],13:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -22655,7 +23123,7 @@ var AutoFocusUtils = {
 };
 
 module.exports = AutoFocusUtils;
-},{"./ReactDOMComponentTree":47,"fbjs/lib/focusNode":154}],9:[function(require,module,exports){
+},{"./ReactDOMComponentTree":52,"fbjs/lib/focusNode":159}],14:[function(require,module,exports){
 /**
  * Copyright 2013-present Facebook, Inc.
  * All rights reserved.
@@ -23044,7 +23512,7 @@ var BeforeInputEventPlugin = {
 };
 
 module.exports = BeforeInputEventPlugin;
-},{"./EventConstants":23,"./EventPropagators":27,"./FallbackCompositionState":28,"./SyntheticCompositionEvent":103,"./SyntheticInputEvent":107,"fbjs/lib/ExecutionEnvironment":146,"fbjs/lib/keyOf":164}],10:[function(require,module,exports){
+},{"./EventConstants":28,"./EventPropagators":32,"./FallbackCompositionState":33,"./SyntheticCompositionEvent":108,"./SyntheticInputEvent":112,"fbjs/lib/ExecutionEnvironment":151,"fbjs/lib/keyOf":169}],15:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -23193,7 +23661,7 @@ var CSSProperty = {
 };
 
 module.exports = CSSProperty;
-},{}],11:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -23402,7 +23870,7 @@ ReactPerf.measureMethods(CSSPropertyOperations, 'CSSPropertyOperations', {
 module.exports = CSSPropertyOperations;
 }).call(this,require('_process'))
 
-},{"./CSSProperty":10,"./ReactPerf":88,"./dangerousStyleValue":120,"_process":3,"fbjs/lib/ExecutionEnvironment":146,"fbjs/lib/camelizeStyleName":148,"fbjs/lib/hyphenateStyleName":159,"fbjs/lib/memoizeStringOnly":166,"fbjs/lib/warning":170}],12:[function(require,module,exports){
+},{"./CSSProperty":15,"./ReactPerf":93,"./dangerousStyleValue":125,"_process":5,"fbjs/lib/ExecutionEnvironment":151,"fbjs/lib/camelizeStyleName":153,"fbjs/lib/hyphenateStyleName":164,"fbjs/lib/memoizeStringOnly":171,"fbjs/lib/warning":175}],17:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -23511,7 +23979,7 @@ PooledClass.addPoolingTo(CallbackQueue);
 module.exports = CallbackQueue;
 }).call(this,require('_process'))
 
-},{"./PooledClass":32,"_process":3,"fbjs/lib/invariant":160,"object-assign":171}],13:[function(require,module,exports){
+},{"./PooledClass":37,"_process":5,"fbjs/lib/invariant":165,"object-assign":176}],18:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -23837,7 +24305,7 @@ var ChangeEventPlugin = {
 };
 
 module.exports = ChangeEventPlugin;
-},{"./EventConstants":23,"./EventPluginHub":24,"./EventPropagators":27,"./ReactDOMComponentTree":47,"./ReactUpdates":96,"./SyntheticEvent":105,"./getEventTarget":128,"./isEventSupported":135,"./isTextInputElement":136,"fbjs/lib/ExecutionEnvironment":146,"fbjs/lib/keyOf":164}],14:[function(require,module,exports){
+},{"./EventConstants":28,"./EventPluginHub":29,"./EventPropagators":32,"./ReactDOMComponentTree":52,"./ReactUpdates":101,"./SyntheticEvent":110,"./getEventTarget":133,"./isEventSupported":140,"./isTextInputElement":141,"fbjs/lib/ExecutionEnvironment":151,"fbjs/lib/keyOf":169}],19:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -23997,7 +24465,7 @@ ReactPerf.measureMethods(DOMChildrenOperations, 'DOMChildrenOperations', {
 });
 
 module.exports = DOMChildrenOperations;
-},{"./DOMLazyTree":15,"./Danger":19,"./ReactMultiChildUpdateTypes":83,"./ReactPerf":88,"./createMicrosoftUnsafeLocalFunction":119,"./setInnerHTML":140,"./setTextContent":141}],15:[function(require,module,exports){
+},{"./DOMLazyTree":20,"./Danger":24,"./ReactMultiChildUpdateTypes":88,"./ReactPerf":93,"./createMicrosoftUnsafeLocalFunction":124,"./setInnerHTML":145,"./setTextContent":146}],20:[function(require,module,exports){
 /**
  * Copyright 2015-present, Facebook, Inc.
  * All rights reserved.
@@ -24103,7 +24571,7 @@ DOMLazyTree.queueHTML = queueHTML;
 DOMLazyTree.queueText = queueText;
 
 module.exports = DOMLazyTree;
-},{"./createMicrosoftUnsafeLocalFunction":119,"./setTextContent":141}],16:[function(require,module,exports){
+},{"./createMicrosoftUnsafeLocalFunction":124,"./setTextContent":146}],21:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -24124,7 +24592,7 @@ var DOMNamespaces = {
 };
 
 module.exports = DOMNamespaces;
-},{}],17:[function(require,module,exports){
+},{}],22:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -24341,7 +24809,7 @@ var DOMProperty = {
 module.exports = DOMProperty;
 }).call(this,require('_process'))
 
-},{"_process":3,"fbjs/lib/invariant":160}],18:[function(require,module,exports){
+},{"_process":5,"fbjs/lib/invariant":165}],23:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -24558,7 +25026,7 @@ ReactPerf.measureMethods(DOMPropertyOperations, 'DOMPropertyOperations', {
 module.exports = DOMPropertyOperations;
 }).call(this,require('_process'))
 
-},{"./DOMProperty":17,"./ReactDOMInstrumentation":55,"./ReactPerf":88,"./quoteAttributeValueForBrowser":138,"_process":3,"fbjs/lib/warning":170}],19:[function(require,module,exports){
+},{"./DOMProperty":22,"./ReactDOMInstrumentation":60,"./ReactPerf":93,"./quoteAttributeValueForBrowser":143,"_process":5,"fbjs/lib/warning":175}],24:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -24706,7 +25174,7 @@ var Danger = {
 module.exports = Danger;
 }).call(this,require('_process'))
 
-},{"./DOMLazyTree":15,"_process":3,"fbjs/lib/ExecutionEnvironment":146,"fbjs/lib/createNodesFromMarkup":151,"fbjs/lib/emptyFunction":152,"fbjs/lib/getMarkupWrap":156,"fbjs/lib/invariant":160}],20:[function(require,module,exports){
+},{"./DOMLazyTree":20,"_process":5,"fbjs/lib/ExecutionEnvironment":151,"fbjs/lib/createNodesFromMarkup":156,"fbjs/lib/emptyFunction":157,"fbjs/lib/getMarkupWrap":161,"fbjs/lib/invariant":165}],25:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -24734,7 +25202,7 @@ var keyOf = require('fbjs/lib/keyOf');
 var DefaultEventPluginOrder = [keyOf({ ResponderEventPlugin: null }), keyOf({ SimpleEventPlugin: null }), keyOf({ TapEventPlugin: null }), keyOf({ EnterLeaveEventPlugin: null }), keyOf({ ChangeEventPlugin: null }), keyOf({ SelectEventPlugin: null }), keyOf({ BeforeInputEventPlugin: null })];
 
 module.exports = DefaultEventPluginOrder;
-},{"fbjs/lib/keyOf":164}],21:[function(require,module,exports){
+},{"fbjs/lib/keyOf":169}],26:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -24785,7 +25253,7 @@ var DisabledInputUtils = {
 };
 
 module.exports = DisabledInputUtils;
-},{}],22:[function(require,module,exports){
+},{}],27:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -24891,7 +25359,7 @@ var EnterLeaveEventPlugin = {
 };
 
 module.exports = EnterLeaveEventPlugin;
-},{"./EventConstants":23,"./EventPropagators":27,"./ReactDOMComponentTree":47,"./SyntheticMouseEvent":109,"fbjs/lib/keyOf":164}],23:[function(require,module,exports){
+},{"./EventConstants":28,"./EventPropagators":32,"./ReactDOMComponentTree":52,"./SyntheticMouseEvent":114,"fbjs/lib/keyOf":169}],28:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -24989,7 +25457,7 @@ var EventConstants = {
 };
 
 module.exports = EventConstants;
-},{"fbjs/lib/keyMirror":163}],24:[function(require,module,exports){
+},{"fbjs/lib/keyMirror":168}],29:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -25228,7 +25696,7 @@ var EventPluginHub = {
 module.exports = EventPluginHub;
 }).call(this,require('_process'))
 
-},{"./EventPluginRegistry":25,"./EventPluginUtils":26,"./ReactErrorUtils":71,"./accumulateInto":116,"./forEachAccumulated":124,"_process":3,"fbjs/lib/invariant":160}],25:[function(require,module,exports){
+},{"./EventPluginRegistry":30,"./EventPluginUtils":31,"./ReactErrorUtils":76,"./accumulateInto":121,"./forEachAccumulated":129,"_process":5,"fbjs/lib/invariant":165}],30:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -25473,7 +25941,7 @@ var EventPluginRegistry = {
 module.exports = EventPluginRegistry;
 }).call(this,require('_process'))
 
-},{"_process":3,"fbjs/lib/invariant":160}],26:[function(require,module,exports){
+},{"_process":5,"fbjs/lib/invariant":165}],31:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -25704,7 +26172,7 @@ var EventPluginUtils = {
 module.exports = EventPluginUtils;
 }).call(this,require('_process'))
 
-},{"./EventConstants":23,"./ReactErrorUtils":71,"_process":3,"fbjs/lib/invariant":160,"fbjs/lib/warning":170}],27:[function(require,module,exports){
+},{"./EventConstants":28,"./ReactErrorUtils":76,"_process":5,"fbjs/lib/invariant":165,"fbjs/lib/warning":175}],32:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -25845,7 +26313,7 @@ var EventPropagators = {
 module.exports = EventPropagators;
 }).call(this,require('_process'))
 
-},{"./EventConstants":23,"./EventPluginHub":24,"./EventPluginUtils":26,"./accumulateInto":116,"./forEachAccumulated":124,"_process":3,"fbjs/lib/warning":170}],28:[function(require,module,exports){
+},{"./EventConstants":28,"./EventPluginHub":29,"./EventPluginUtils":31,"./accumulateInto":121,"./forEachAccumulated":129,"_process":5,"fbjs/lib/warning":175}],33:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -25941,7 +26409,7 @@ _assign(FallbackCompositionState.prototype, {
 PooledClass.addPoolingTo(FallbackCompositionState);
 
 module.exports = FallbackCompositionState;
-},{"./PooledClass":32,"./getTextContentAccessor":132,"object-assign":171}],29:[function(require,module,exports){
+},{"./PooledClass":37,"./getTextContentAccessor":137,"object-assign":176}],34:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -26151,7 +26619,7 @@ var HTMLDOMPropertyConfig = {
 };
 
 module.exports = HTMLDOMPropertyConfig;
-},{"./DOMProperty":17}],30:[function(require,module,exports){
+},{"./DOMProperty":22}],35:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -26210,7 +26678,7 @@ var KeyEscapeUtils = {
 };
 
 module.exports = KeyEscapeUtils;
-},{}],31:[function(require,module,exports){
+},{}],36:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -26347,7 +26815,7 @@ var LinkedValueUtils = {
 module.exports = LinkedValueUtils;
 }).call(this,require('_process'))
 
-},{"./ReactPropTypeLocations":90,"./ReactPropTypes":91,"_process":3,"fbjs/lib/invariant":160,"fbjs/lib/warning":170}],32:[function(require,module,exports){
+},{"./ReactPropTypeLocations":95,"./ReactPropTypes":96,"_process":5,"fbjs/lib/invariant":165,"fbjs/lib/warning":175}],37:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -26470,7 +26938,7 @@ var PooledClass = {
 module.exports = PooledClass;
 }).call(this,require('_process'))
 
-},{"_process":3,"fbjs/lib/invariant":160}],33:[function(require,module,exports){
+},{"_process":5,"fbjs/lib/invariant":165}],38:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -26561,7 +27029,7 @@ var React = {
 module.exports = React;
 }).call(this,require('_process'))
 
-},{"./ReactChildren":36,"./ReactClass":37,"./ReactComponent":38,"./ReactDOMFactories":51,"./ReactElement":68,"./ReactElementValidator":69,"./ReactPropTypes":91,"./ReactVersion":97,"./onlyChild":137,"_process":3,"fbjs/lib/warning":170,"object-assign":171}],34:[function(require,module,exports){
+},{"./ReactChildren":41,"./ReactClass":42,"./ReactComponent":43,"./ReactDOMFactories":56,"./ReactElement":73,"./ReactElementValidator":74,"./ReactPropTypes":96,"./ReactVersion":102,"./onlyChild":142,"_process":5,"fbjs/lib/warning":175,"object-assign":176}],39:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -26879,7 +27347,7 @@ var ReactBrowserEventEmitter = _assign({}, ReactEventEmitterMixin, {
 });
 
 module.exports = ReactBrowserEventEmitter;
-},{"./EventConstants":23,"./EventPluginRegistry":25,"./ReactEventEmitterMixin":72,"./ViewportMetrics":115,"./getVendorPrefixedEventName":133,"./isEventSupported":135,"object-assign":171}],35:[function(require,module,exports){
+},{"./EventConstants":28,"./EventPluginRegistry":30,"./ReactEventEmitterMixin":77,"./ViewportMetrics":120,"./getVendorPrefixedEventName":138,"./isEventSupported":140,"object-assign":176}],40:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2014-present, Facebook, Inc.
@@ -27008,7 +27476,7 @@ var ReactChildReconciler = {
 module.exports = ReactChildReconciler;
 }).call(this,require('_process'))
 
-},{"./KeyEscapeUtils":30,"./ReactReconciler":93,"./instantiateReactComponent":134,"./shouldUpdateReactComponent":142,"./traverseAllChildren":143,"_process":3,"fbjs/lib/warning":170}],36:[function(require,module,exports){
+},{"./KeyEscapeUtils":35,"./ReactReconciler":98,"./instantiateReactComponent":139,"./shouldUpdateReactComponent":147,"./traverseAllChildren":148,"_process":5,"fbjs/lib/warning":175}],41:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -27192,7 +27660,7 @@ var ReactChildren = {
 };
 
 module.exports = ReactChildren;
-},{"./PooledClass":32,"./ReactElement":68,"./traverseAllChildren":143,"fbjs/lib/emptyFunction":152}],37:[function(require,module,exports){
+},{"./PooledClass":37,"./ReactElement":73,"./traverseAllChildren":148,"fbjs/lib/emptyFunction":157}],42:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -27919,7 +28387,7 @@ var ReactClass = {
 module.exports = ReactClass;
 }).call(this,require('_process'))
 
-},{"./ReactComponent":38,"./ReactElement":68,"./ReactNoopUpdateQueue":86,"./ReactPropTypeLocationNames":89,"./ReactPropTypeLocations":90,"_process":3,"fbjs/lib/emptyObject":153,"fbjs/lib/invariant":160,"fbjs/lib/keyMirror":163,"fbjs/lib/keyOf":164,"fbjs/lib/warning":170,"object-assign":171}],38:[function(require,module,exports){
+},{"./ReactComponent":43,"./ReactElement":73,"./ReactNoopUpdateQueue":91,"./ReactPropTypeLocationNames":94,"./ReactPropTypeLocations":95,"_process":5,"fbjs/lib/emptyObject":158,"fbjs/lib/invariant":165,"fbjs/lib/keyMirror":168,"fbjs/lib/keyOf":169,"fbjs/lib/warning":175,"object-assign":176}],43:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -28044,7 +28512,7 @@ if (process.env.NODE_ENV !== 'production') {
 module.exports = ReactComponent;
 }).call(this,require('_process'))
 
-},{"./ReactInstrumentation":78,"./ReactNoopUpdateQueue":86,"./canDefineProperty":118,"_process":3,"fbjs/lib/emptyObject":153,"fbjs/lib/invariant":160,"fbjs/lib/warning":170}],39:[function(require,module,exports){
+},{"./ReactInstrumentation":83,"./ReactNoopUpdateQueue":91,"./canDefineProperty":123,"_process":5,"fbjs/lib/emptyObject":158,"fbjs/lib/invariant":165,"fbjs/lib/warning":175}],44:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -28089,7 +28557,7 @@ ReactPerf.measureMethods(ReactComponentBrowserEnvironment, 'ReactComponentBrowse
 });
 
 module.exports = ReactComponentBrowserEnvironment;
-},{"./DOMChildrenOperations":14,"./ReactDOMIDOperations":53,"./ReactPerf":88}],40:[function(require,module,exports){
+},{"./DOMChildrenOperations":19,"./ReactDOMIDOperations":58,"./ReactPerf":93}],45:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2014-present, Facebook, Inc.
@@ -28144,7 +28612,7 @@ var ReactComponentEnvironment = {
 module.exports = ReactComponentEnvironment;
 }).call(this,require('_process'))
 
-},{"_process":3,"fbjs/lib/invariant":160}],41:[function(require,module,exports){
+},{"_process":5,"fbjs/lib/invariant":165}],46:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -28942,7 +29410,7 @@ var ReactCompositeComponent = {
 module.exports = ReactCompositeComponent;
 }).call(this,require('_process'))
 
-},{"./ReactComponentEnvironment":40,"./ReactCurrentOwner":42,"./ReactElement":68,"./ReactErrorUtils":71,"./ReactInstanceMap":77,"./ReactInstrumentation":78,"./ReactNodeTypes":85,"./ReactPerf":88,"./ReactPropTypeLocationNames":89,"./ReactPropTypeLocations":90,"./ReactReconciler":93,"./ReactUpdateQueue":95,"./shouldUpdateReactComponent":142,"_process":3,"fbjs/lib/emptyObject":153,"fbjs/lib/invariant":160,"fbjs/lib/warning":170,"object-assign":171}],42:[function(require,module,exports){
+},{"./ReactComponentEnvironment":45,"./ReactCurrentOwner":47,"./ReactElement":73,"./ReactErrorUtils":76,"./ReactInstanceMap":82,"./ReactInstrumentation":83,"./ReactNodeTypes":90,"./ReactPerf":93,"./ReactPropTypeLocationNames":94,"./ReactPropTypeLocations":95,"./ReactReconciler":98,"./ReactUpdateQueue":100,"./shouldUpdateReactComponent":147,"_process":5,"fbjs/lib/emptyObject":158,"fbjs/lib/invariant":165,"fbjs/lib/warning":175,"object-assign":176}],47:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -28974,7 +29442,7 @@ var ReactCurrentOwner = {
 };
 
 module.exports = ReactCurrentOwner;
-},{}],43:[function(require,module,exports){
+},{}],48:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -29082,7 +29550,7 @@ if (process.env.NODE_ENV !== 'production') {
 module.exports = React;
 }).call(this,require('_process'))
 
-},{"./ReactDOMComponentTree":47,"./ReactDefaultInjection":65,"./ReactMount":81,"./ReactPerf":88,"./ReactReconciler":93,"./ReactUpdates":96,"./ReactVersion":97,"./findDOMNode":122,"./getNativeComponentFromComposite":130,"./renderSubtreeIntoContainer":139,"_process":3,"fbjs/lib/ExecutionEnvironment":146,"fbjs/lib/warning":170}],44:[function(require,module,exports){
+},{"./ReactDOMComponentTree":52,"./ReactDefaultInjection":70,"./ReactMount":86,"./ReactPerf":93,"./ReactReconciler":98,"./ReactUpdates":101,"./ReactVersion":102,"./findDOMNode":127,"./getNativeComponentFromComposite":135,"./renderSubtreeIntoContainer":144,"_process":5,"fbjs/lib/ExecutionEnvironment":151,"fbjs/lib/warning":175}],49:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -29107,7 +29575,7 @@ var ReactDOMButton = {
 };
 
 module.exports = ReactDOMButton;
-},{"./DisabledInputUtils":21}],45:[function(require,module,exports){
+},{"./DisabledInputUtils":26}],50:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -30020,7 +30488,7 @@ _assign(ReactDOMComponent.prototype, ReactDOMComponent.Mixin, ReactMultiChild.Mi
 module.exports = ReactDOMComponent;
 }).call(this,require('_process'))
 
-},{"./AutoFocusUtils":8,"./CSSPropertyOperations":11,"./DOMLazyTree":15,"./DOMNamespaces":16,"./DOMProperty":17,"./DOMPropertyOperations":18,"./EventConstants":23,"./EventPluginHub":24,"./EventPluginRegistry":25,"./ReactBrowserEventEmitter":34,"./ReactComponentBrowserEnvironment":39,"./ReactDOMButton":44,"./ReactDOMComponentFlags":46,"./ReactDOMComponentTree":47,"./ReactDOMInput":54,"./ReactDOMOption":56,"./ReactDOMSelect":57,"./ReactDOMTextarea":60,"./ReactMultiChild":82,"./ReactPerf":88,"./escapeTextContentForBrowser":121,"./isEventSupported":135,"./validateDOMNesting":144,"_process":3,"fbjs/lib/invariant":160,"fbjs/lib/keyOf":164,"fbjs/lib/shallowEqual":169,"fbjs/lib/warning":170,"object-assign":171}],46:[function(require,module,exports){
+},{"./AutoFocusUtils":13,"./CSSPropertyOperations":16,"./DOMLazyTree":20,"./DOMNamespaces":21,"./DOMProperty":22,"./DOMPropertyOperations":23,"./EventConstants":28,"./EventPluginHub":29,"./EventPluginRegistry":30,"./ReactBrowserEventEmitter":39,"./ReactComponentBrowserEnvironment":44,"./ReactDOMButton":49,"./ReactDOMComponentFlags":51,"./ReactDOMComponentTree":52,"./ReactDOMInput":59,"./ReactDOMOption":61,"./ReactDOMSelect":62,"./ReactDOMTextarea":65,"./ReactMultiChild":87,"./ReactPerf":93,"./escapeTextContentForBrowser":126,"./isEventSupported":140,"./validateDOMNesting":149,"_process":5,"fbjs/lib/invariant":165,"fbjs/lib/keyOf":169,"fbjs/lib/shallowEqual":174,"fbjs/lib/warning":175,"object-assign":176}],51:[function(require,module,exports){
 /**
  * Copyright 2015-present, Facebook, Inc.
  * All rights reserved.
@@ -30039,7 +30507,7 @@ var ReactDOMComponentFlags = {
 };
 
 module.exports = ReactDOMComponentFlags;
-},{}],47:[function(require,module,exports){
+},{}],52:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -30229,7 +30697,7 @@ var ReactDOMComponentTree = {
 module.exports = ReactDOMComponentTree;
 }).call(this,require('_process'))
 
-},{"./DOMProperty":17,"./ReactDOMComponentFlags":46,"_process":3,"fbjs/lib/invariant":160}],48:[function(require,module,exports){
+},{"./DOMProperty":22,"./ReactDOMComponentFlags":51,"_process":5,"fbjs/lib/invariant":165}],53:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -30266,7 +30734,7 @@ function ReactDOMContainerInfo(topLevelWrapper, node) {
 module.exports = ReactDOMContainerInfo;
 }).call(this,require('_process'))
 
-},{"./validateDOMNesting":144,"_process":3}],49:[function(require,module,exports){
+},{"./validateDOMNesting":149,"_process":5}],54:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -30331,7 +30799,7 @@ ReactDOMDebugTool.addDevtool(ReactDOMUnknownPropertyDevtool);
 module.exports = ReactDOMDebugTool;
 }).call(this,require('_process'))
 
-},{"./ReactDOMUnknownPropertyDevtool":62,"_process":3,"fbjs/lib/warning":170}],50:[function(require,module,exports){
+},{"./ReactDOMUnknownPropertyDevtool":67,"_process":5,"fbjs/lib/warning":175}],55:[function(require,module,exports){
 /**
  * Copyright 2014-present, Facebook, Inc.
  * All rights reserved.
@@ -30392,7 +30860,7 @@ _assign(ReactDOMEmptyComponent.prototype, {
 });
 
 module.exports = ReactDOMEmptyComponent;
-},{"./DOMLazyTree":15,"./ReactDOMComponentTree":47,"object-assign":171}],51:[function(require,module,exports){
+},{"./DOMLazyTree":20,"./ReactDOMComponentTree":52,"object-assign":176}],56:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -30572,7 +31040,7 @@ var ReactDOMFactories = mapObject({
 module.exports = ReactDOMFactories;
 }).call(this,require('_process'))
 
-},{"./ReactElement":68,"./ReactElementValidator":69,"_process":3,"fbjs/lib/mapObject":165}],52:[function(require,module,exports){
+},{"./ReactElement":73,"./ReactElementValidator":74,"_process":5,"fbjs/lib/mapObject":170}],57:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -30591,7 +31059,7 @@ var ReactDOMFeatureFlags = {
 };
 
 module.exports = ReactDOMFeatureFlags;
-},{}],53:[function(require,module,exports){
+},{}],58:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -30631,7 +31099,7 @@ ReactPerf.measureMethods(ReactDOMIDOperations, 'ReactDOMIDOperations', {
 });
 
 module.exports = ReactDOMIDOperations;
-},{"./DOMChildrenOperations":14,"./ReactDOMComponentTree":47,"./ReactPerf":88}],54:[function(require,module,exports){
+},{"./DOMChildrenOperations":19,"./ReactDOMComponentTree":52,"./ReactPerf":93}],59:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -30839,7 +31307,7 @@ function _handleChange(event) {
 module.exports = ReactDOMInput;
 }).call(this,require('_process'))
 
-},{"./DOMPropertyOperations":18,"./DisabledInputUtils":21,"./LinkedValueUtils":31,"./ReactDOMComponentTree":47,"./ReactUpdates":96,"_process":3,"fbjs/lib/invariant":160,"fbjs/lib/warning":170,"object-assign":171}],55:[function(require,module,exports){
+},{"./DOMPropertyOperations":23,"./DisabledInputUtils":26,"./LinkedValueUtils":36,"./ReactDOMComponentTree":52,"./ReactUpdates":101,"_process":5,"fbjs/lib/invariant":165,"fbjs/lib/warning":175,"object-assign":176}],60:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -30856,7 +31324,7 @@ module.exports = ReactDOMInput;
 var ReactDOMDebugTool = require('./ReactDOMDebugTool');
 
 module.exports = { debugTool: ReactDOMDebugTool };
-},{"./ReactDOMDebugTool":49}],56:[function(require,module,exports){
+},{"./ReactDOMDebugTool":54}],61:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -30969,7 +31437,7 @@ var ReactDOMOption = {
 module.exports = ReactDOMOption;
 }).call(this,require('_process'))
 
-},{"./ReactChildren":36,"./ReactDOMComponentTree":47,"./ReactDOMSelect":57,"_process":3,"fbjs/lib/warning":170,"object-assign":171}],57:[function(require,module,exports){
+},{"./ReactChildren":41,"./ReactDOMComponentTree":52,"./ReactDOMSelect":62,"_process":5,"fbjs/lib/warning":175,"object-assign":176}],62:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -31186,7 +31654,7 @@ function _handleChange(event) {
 module.exports = ReactDOMSelect;
 }).call(this,require('_process'))
 
-},{"./DisabledInputUtils":21,"./LinkedValueUtils":31,"./ReactDOMComponentTree":47,"./ReactUpdates":96,"_process":3,"fbjs/lib/warning":170,"object-assign":171}],58:[function(require,module,exports){
+},{"./DisabledInputUtils":26,"./LinkedValueUtils":36,"./ReactDOMComponentTree":52,"./ReactUpdates":101,"_process":5,"fbjs/lib/warning":175,"object-assign":176}],63:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -31399,7 +31867,7 @@ var ReactDOMSelection = {
 };
 
 module.exports = ReactDOMSelection;
-},{"./getNodeForCharacterOffset":131,"./getTextContentAccessor":132,"fbjs/lib/ExecutionEnvironment":146}],59:[function(require,module,exports){
+},{"./getNodeForCharacterOffset":136,"./getTextContentAccessor":137,"fbjs/lib/ExecutionEnvironment":151}],64:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -31572,7 +32040,7 @@ ReactPerf.measureMethods(ReactDOMTextComponent.prototype, 'ReactDOMTextComponent
 module.exports = ReactDOMTextComponent;
 }).call(this,require('_process'))
 
-},{"./DOMChildrenOperations":14,"./DOMLazyTree":15,"./ReactDOMComponentTree":47,"./ReactPerf":88,"./escapeTextContentForBrowser":121,"./validateDOMNesting":144,"_process":3,"fbjs/lib/invariant":160,"object-assign":171}],60:[function(require,module,exports){
+},{"./DOMChildrenOperations":19,"./DOMLazyTree":20,"./ReactDOMComponentTree":52,"./ReactPerf":93,"./escapeTextContentForBrowser":126,"./validateDOMNesting":149,"_process":5,"fbjs/lib/invariant":165,"object-assign":176}],65:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -31718,7 +32186,7 @@ function _handleChange(event) {
 module.exports = ReactDOMTextarea;
 }).call(this,require('_process'))
 
-},{"./DOMPropertyOperations":18,"./DisabledInputUtils":21,"./LinkedValueUtils":31,"./ReactDOMComponentTree":47,"./ReactUpdates":96,"_process":3,"fbjs/lib/invariant":160,"fbjs/lib/warning":170,"object-assign":171}],61:[function(require,module,exports){
+},{"./DOMPropertyOperations":23,"./DisabledInputUtils":26,"./LinkedValueUtils":36,"./ReactDOMComponentTree":52,"./ReactUpdates":101,"_process":5,"fbjs/lib/invariant":165,"fbjs/lib/warning":175,"object-assign":176}],66:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2015-present, Facebook, Inc.
@@ -31856,7 +32324,7 @@ module.exports = {
 };
 }).call(this,require('_process'))
 
-},{"_process":3,"fbjs/lib/invariant":160}],62:[function(require,module,exports){
+},{"_process":5,"fbjs/lib/invariant":165}],67:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -31924,7 +32392,7 @@ var ReactDOMUnknownPropertyDevtool = {
 module.exports = ReactDOMUnknownPropertyDevtool;
 }).call(this,require('_process'))
 
-},{"./DOMProperty":17,"./EventPluginRegistry":25,"_process":3,"fbjs/lib/warning":170}],63:[function(require,module,exports){
+},{"./DOMProperty":22,"./EventPluginRegistry":30,"_process":5,"fbjs/lib/warning":175}],68:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2016-present, Facebook, Inc.
@@ -32000,7 +32468,7 @@ ReactDebugTool.addDevtool(ReactInvalidSetStateWarningDevTool);
 module.exports = ReactDebugTool;
 }).call(this,require('_process'))
 
-},{"./ReactInvalidSetStateWarningDevTool":79,"_process":3,"fbjs/lib/warning":170}],64:[function(require,module,exports){
+},{"./ReactInvalidSetStateWarningDevTool":84,"_process":5,"fbjs/lib/warning":175}],69:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -32069,7 +32537,7 @@ var ReactDefaultBatchingStrategy = {
 };
 
 module.exports = ReactDefaultBatchingStrategy;
-},{"./ReactUpdates":96,"./Transaction":114,"fbjs/lib/emptyFunction":152,"object-assign":171}],65:[function(require,module,exports){
+},{"./ReactUpdates":101,"./Transaction":119,"fbjs/lib/emptyFunction":157,"object-assign":176}],70:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -32166,7 +32634,7 @@ module.exports = {
 };
 }).call(this,require('_process'))
 
-},{"./BeforeInputEventPlugin":9,"./ChangeEventPlugin":13,"./DefaultEventPluginOrder":20,"./EnterLeaveEventPlugin":22,"./HTMLDOMPropertyConfig":29,"./ReactComponentBrowserEnvironment":39,"./ReactDOMComponent":45,"./ReactDOMComponentTree":47,"./ReactDOMEmptyComponent":50,"./ReactDOMTextComponent":59,"./ReactDOMTreeTraversal":61,"./ReactDefaultBatchingStrategy":64,"./ReactDefaultPerf":66,"./ReactEventListener":73,"./ReactInjection":75,"./ReactReconcileTransaction":92,"./SVGDOMPropertyConfig":98,"./SelectEventPlugin":99,"./SimpleEventPlugin":100,"_process":3,"fbjs/lib/ExecutionEnvironment":146}],66:[function(require,module,exports){
+},{"./BeforeInputEventPlugin":14,"./ChangeEventPlugin":18,"./DefaultEventPluginOrder":25,"./EnterLeaveEventPlugin":27,"./HTMLDOMPropertyConfig":34,"./ReactComponentBrowserEnvironment":44,"./ReactDOMComponent":50,"./ReactDOMComponentTree":52,"./ReactDOMEmptyComponent":55,"./ReactDOMTextComponent":64,"./ReactDOMTreeTraversal":66,"./ReactDefaultBatchingStrategy":69,"./ReactDefaultPerf":71,"./ReactEventListener":78,"./ReactInjection":80,"./ReactReconcileTransaction":97,"./SVGDOMPropertyConfig":103,"./SelectEventPlugin":104,"./SimpleEventPlugin":105,"_process":5,"fbjs/lib/ExecutionEnvironment":151}],71:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -32486,7 +32954,7 @@ var ReactDefaultPerf = {
 module.exports = ReactDefaultPerf;
 }).call(this,require('_process'))
 
-},{"./DOMProperty":17,"./ReactDOMComponentTree":47,"./ReactDefaultPerfAnalysis":67,"./ReactMount":81,"./ReactPerf":88,"_process":3,"fbjs/lib/performanceNow":168,"fbjs/lib/warning":170}],67:[function(require,module,exports){
+},{"./DOMProperty":22,"./ReactDOMComponentTree":52,"./ReactDefaultPerfAnalysis":72,"./ReactMount":86,"./ReactPerf":93,"_process":5,"fbjs/lib/performanceNow":173,"fbjs/lib/warning":175}],72:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -32697,7 +33165,7 @@ var ReactDefaultPerfAnalysis = {
 };
 
 module.exports = ReactDefaultPerfAnalysis;
-},{"object-assign":171}],68:[function(require,module,exports){
+},{"object-assign":176}],73:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2014-present, Facebook, Inc.
@@ -32988,7 +33456,7 @@ ReactElement.isValidElement = function (object) {
 module.exports = ReactElement;
 }).call(this,require('_process'))
 
-},{"./ReactCurrentOwner":42,"./canDefineProperty":118,"_process":3,"fbjs/lib/warning":170,"object-assign":171}],69:[function(require,module,exports){
+},{"./ReactCurrentOwner":47,"./canDefineProperty":123,"_process":5,"fbjs/lib/warning":175,"object-assign":176}],74:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2014-present, Facebook, Inc.
@@ -33273,7 +33741,7 @@ var ReactElementValidator = {
 module.exports = ReactElementValidator;
 }).call(this,require('_process'))
 
-},{"./ReactCurrentOwner":42,"./ReactElement":68,"./ReactPropTypeLocationNames":89,"./ReactPropTypeLocations":90,"./canDefineProperty":118,"./getIteratorFn":129,"_process":3,"fbjs/lib/invariant":160,"fbjs/lib/warning":170}],70:[function(require,module,exports){
+},{"./ReactCurrentOwner":47,"./ReactElement":73,"./ReactPropTypeLocationNames":94,"./ReactPropTypeLocations":95,"./canDefineProperty":123,"./getIteratorFn":134,"_process":5,"fbjs/lib/invariant":165,"fbjs/lib/warning":175}],75:[function(require,module,exports){
 /**
  * Copyright 2014-present, Facebook, Inc.
  * All rights reserved.
@@ -33304,7 +33772,7 @@ var ReactEmptyComponent = {
 ReactEmptyComponent.injection = ReactEmptyComponentInjection;
 
 module.exports = ReactEmptyComponent;
-},{}],71:[function(require,module,exports){
+},{}],76:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -33384,7 +33852,7 @@ if (process.env.NODE_ENV !== 'production') {
 module.exports = ReactErrorUtils;
 }).call(this,require('_process'))
 
-},{"_process":3}],72:[function(require,module,exports){
+},{"_process":5}],77:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -33418,7 +33886,7 @@ var ReactEventEmitterMixin = {
 };
 
 module.exports = ReactEventEmitterMixin;
-},{"./EventPluginHub":24}],73:[function(require,module,exports){
+},{"./EventPluginHub":29}],78:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -33576,7 +34044,7 @@ var ReactEventListener = {
 };
 
 module.exports = ReactEventListener;
-},{"./PooledClass":32,"./ReactDOMComponentTree":47,"./ReactUpdates":96,"./getEventTarget":128,"fbjs/lib/EventListener":145,"fbjs/lib/ExecutionEnvironment":146,"fbjs/lib/getUnboundedScrollPosition":157,"object-assign":171}],74:[function(require,module,exports){
+},{"./PooledClass":37,"./ReactDOMComponentTree":52,"./ReactUpdates":101,"./getEventTarget":133,"fbjs/lib/EventListener":150,"fbjs/lib/ExecutionEnvironment":151,"fbjs/lib/getUnboundedScrollPosition":162,"object-assign":176}],79:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -33598,7 +34066,7 @@ var ReactFeatureFlags = {
 };
 
 module.exports = ReactFeatureFlags;
-},{}],75:[function(require,module,exports){
+},{}],80:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -33637,7 +34105,7 @@ var ReactInjection = {
 };
 
 module.exports = ReactInjection;
-},{"./DOMProperty":17,"./EventPluginHub":24,"./EventPluginUtils":26,"./ReactBrowserEventEmitter":34,"./ReactClass":37,"./ReactComponentEnvironment":40,"./ReactEmptyComponent":70,"./ReactNativeComponent":84,"./ReactPerf":88,"./ReactUpdates":96}],76:[function(require,module,exports){
+},{"./DOMProperty":22,"./EventPluginHub":29,"./EventPluginUtils":31,"./ReactBrowserEventEmitter":39,"./ReactClass":42,"./ReactComponentEnvironment":45,"./ReactEmptyComponent":75,"./ReactNativeComponent":89,"./ReactPerf":93,"./ReactUpdates":101}],81:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -33762,7 +34230,7 @@ var ReactInputSelection = {
 };
 
 module.exports = ReactInputSelection;
-},{"./ReactDOMSelection":58,"fbjs/lib/containsNode":149,"fbjs/lib/focusNode":154,"fbjs/lib/getActiveElement":155}],77:[function(require,module,exports){
+},{"./ReactDOMSelection":63,"fbjs/lib/containsNode":154,"fbjs/lib/focusNode":159,"fbjs/lib/getActiveElement":160}],82:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -33811,7 +34279,7 @@ var ReactInstanceMap = {
 };
 
 module.exports = ReactInstanceMap;
-},{}],78:[function(require,module,exports){
+},{}],83:[function(require,module,exports){
 /**
  * Copyright 2016-present, Facebook, Inc.
  * All rights reserved.
@@ -33828,7 +34296,7 @@ module.exports = ReactInstanceMap;
 var ReactDebugTool = require('./ReactDebugTool');
 
 module.exports = { debugTool: ReactDebugTool };
-},{"./ReactDebugTool":63}],79:[function(require,module,exports){
+},{"./ReactDebugTool":68}],84:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2016-present, Facebook, Inc.
@@ -33868,7 +34336,7 @@ var ReactInvalidSetStateWarningDevTool = {
 module.exports = ReactInvalidSetStateWarningDevTool;
 }).call(this,require('_process'))
 
-},{"_process":3,"fbjs/lib/warning":170}],80:[function(require,module,exports){
+},{"_process":5,"fbjs/lib/warning":175}],85:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -33919,7 +34387,7 @@ var ReactMarkupChecksum = {
 };
 
 module.exports = ReactMarkupChecksum;
-},{"./adler32":117}],81:[function(require,module,exports){
+},{"./adler32":122}],86:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -34401,7 +34869,7 @@ ReactPerf.measureMethods(ReactMount, 'ReactMount', {
 module.exports = ReactMount;
 }).call(this,require('_process'))
 
-},{"./DOMLazyTree":15,"./DOMProperty":17,"./ReactBrowserEventEmitter":34,"./ReactCurrentOwner":42,"./ReactDOMComponentTree":47,"./ReactDOMContainerInfo":48,"./ReactDOMFeatureFlags":52,"./ReactElement":68,"./ReactFeatureFlags":74,"./ReactInstrumentation":78,"./ReactMarkupChecksum":80,"./ReactPerf":88,"./ReactReconciler":93,"./ReactUpdateQueue":95,"./ReactUpdates":96,"./instantiateReactComponent":134,"./setInnerHTML":140,"./shouldUpdateReactComponent":142,"_process":3,"fbjs/lib/emptyObject":153,"fbjs/lib/invariant":160,"fbjs/lib/warning":170}],82:[function(require,module,exports){
+},{"./DOMLazyTree":20,"./DOMProperty":22,"./ReactBrowserEventEmitter":39,"./ReactCurrentOwner":47,"./ReactDOMComponentTree":52,"./ReactDOMContainerInfo":53,"./ReactDOMFeatureFlags":57,"./ReactElement":73,"./ReactFeatureFlags":79,"./ReactInstrumentation":83,"./ReactMarkupChecksum":85,"./ReactPerf":93,"./ReactReconciler":98,"./ReactUpdateQueue":100,"./ReactUpdates":101,"./instantiateReactComponent":139,"./setInnerHTML":145,"./shouldUpdateReactComponent":147,"_process":5,"fbjs/lib/emptyObject":158,"fbjs/lib/invariant":165,"fbjs/lib/warning":175}],87:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -34807,7 +35275,7 @@ var ReactMultiChild = {
 module.exports = ReactMultiChild;
 }).call(this,require('_process'))
 
-},{"./ReactChildReconciler":35,"./ReactComponentEnvironment":40,"./ReactCurrentOwner":42,"./ReactMultiChildUpdateTypes":83,"./ReactReconciler":93,"./flattenChildren":123,"_process":3,"fbjs/lib/invariant":160}],83:[function(require,module,exports){
+},{"./ReactChildReconciler":40,"./ReactComponentEnvironment":45,"./ReactCurrentOwner":47,"./ReactMultiChildUpdateTypes":88,"./ReactReconciler":98,"./flattenChildren":128,"_process":5,"fbjs/lib/invariant":165}],88:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -34840,7 +35308,7 @@ var ReactMultiChildUpdateTypes = keyMirror({
 });
 
 module.exports = ReactMultiChildUpdateTypes;
-},{"fbjs/lib/keyMirror":163}],84:[function(require,module,exports){
+},{"fbjs/lib/keyMirror":168}],89:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2014-present, Facebook, Inc.
@@ -34939,7 +35407,7 @@ var ReactNativeComponent = {
 module.exports = ReactNativeComponent;
 }).call(this,require('_process'))
 
-},{"_process":3,"fbjs/lib/invariant":160,"object-assign":171}],85:[function(require,module,exports){
+},{"_process":5,"fbjs/lib/invariant":165,"object-assign":176}],90:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -34980,7 +35448,7 @@ var ReactNodeTypes = {
 module.exports = ReactNodeTypes;
 }).call(this,require('_process'))
 
-},{"./ReactElement":68,"_process":3,"fbjs/lib/invariant":160}],86:[function(require,module,exports){
+},{"./ReactElement":73,"_process":5,"fbjs/lib/invariant":165}],91:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2015-present, Facebook, Inc.
@@ -35079,7 +35547,7 @@ var ReactNoopUpdateQueue = {
 module.exports = ReactNoopUpdateQueue;
 }).call(this,require('_process'))
 
-},{"_process":3,"fbjs/lib/warning":170}],87:[function(require,module,exports){
+},{"_process":5,"fbjs/lib/warning":175}],92:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -35175,7 +35643,7 @@ var ReactOwner = {
 module.exports = ReactOwner;
 }).call(this,require('_process'))
 
-},{"_process":3,"fbjs/lib/invariant":160}],88:[function(require,module,exports){
+},{"_process":5,"fbjs/lib/invariant":165}],93:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -35275,7 +35743,7 @@ function _noMeasure(objName, fnName, func) {
 module.exports = ReactPerf;
 }).call(this,require('_process'))
 
-},{"_process":3}],89:[function(require,module,exports){
+},{"_process":5}],94:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -35303,7 +35771,7 @@ if (process.env.NODE_ENV !== 'production') {
 module.exports = ReactPropTypeLocationNames;
 }).call(this,require('_process'))
 
-},{"_process":3}],90:[function(require,module,exports){
+},{"_process":5}],95:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -35326,7 +35794,7 @@ var ReactPropTypeLocations = keyMirror({
 });
 
 module.exports = ReactPropTypeLocations;
-},{"fbjs/lib/keyMirror":163}],91:[function(require,module,exports){
+},{"fbjs/lib/keyMirror":168}],96:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -35707,7 +36175,7 @@ function getClassName(propValue) {
 }
 
 module.exports = ReactPropTypes;
-},{"./ReactElement":68,"./ReactPropTypeLocationNames":89,"./getIteratorFn":129,"fbjs/lib/emptyFunction":152}],92:[function(require,module,exports){
+},{"./ReactElement":73,"./ReactPropTypeLocationNames":94,"./getIteratorFn":134,"fbjs/lib/emptyFunction":157}],97:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -35870,7 +36338,7 @@ _assign(ReactReconcileTransaction.prototype, Transaction.Mixin, Mixin);
 PooledClass.addPoolingTo(ReactReconcileTransaction);
 
 module.exports = ReactReconcileTransaction;
-},{"./CallbackQueue":12,"./PooledClass":32,"./ReactBrowserEventEmitter":34,"./ReactInputSelection":76,"./Transaction":114,"object-assign":171}],93:[function(require,module,exports){
+},{"./CallbackQueue":17,"./PooledClass":37,"./ReactBrowserEventEmitter":39,"./ReactInputSelection":81,"./Transaction":119,"object-assign":176}],98:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -36004,7 +36472,7 @@ var ReactReconciler = {
 module.exports = ReactReconciler;
 }).call(this,require('_process'))
 
-},{"./ReactInstrumentation":78,"./ReactRef":94,"_process":3}],94:[function(require,module,exports){
+},{"./ReactInstrumentation":83,"./ReactRef":99,"_process":5}],99:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -36083,7 +36551,7 @@ ReactRef.detachRefs = function (instance, element) {
 };
 
 module.exports = ReactRef;
-},{"./ReactOwner":87}],95:[function(require,module,exports){
+},{"./ReactOwner":92}],100:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2015-present, Facebook, Inc.
@@ -36302,7 +36770,7 @@ var ReactUpdateQueue = {
 module.exports = ReactUpdateQueue;
 }).call(this,require('_process'))
 
-},{"./ReactCurrentOwner":42,"./ReactInstanceMap":77,"./ReactUpdates":96,"_process":3,"fbjs/lib/invariant":160,"fbjs/lib/warning":170}],96:[function(require,module,exports){
+},{"./ReactCurrentOwner":47,"./ReactInstanceMap":82,"./ReactUpdates":101,"_process":5,"fbjs/lib/invariant":165,"fbjs/lib/warning":175}],101:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -36547,7 +37015,7 @@ var ReactUpdates = {
 module.exports = ReactUpdates;
 }).call(this,require('_process'))
 
-},{"./CallbackQueue":12,"./PooledClass":32,"./ReactFeatureFlags":74,"./ReactPerf":88,"./ReactReconciler":93,"./Transaction":114,"_process":3,"fbjs/lib/invariant":160,"object-assign":171}],97:[function(require,module,exports){
+},{"./CallbackQueue":17,"./PooledClass":37,"./ReactFeatureFlags":79,"./ReactPerf":93,"./ReactReconciler":98,"./Transaction":119,"_process":5,"fbjs/lib/invariant":165,"object-assign":176}],102:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -36562,7 +37030,7 @@ module.exports = ReactUpdates;
 'use strict';
 
 module.exports = '15.0.2';
-},{}],98:[function(require,module,exports){
+},{}],103:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -36863,7 +37331,7 @@ Object.keys(ATTRS).forEach(function (key) {
 });
 
 module.exports = SVGDOMPropertyConfig;
-},{}],99:[function(require,module,exports){
+},{}],104:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -37060,7 +37528,7 @@ var SelectEventPlugin = {
 };
 
 module.exports = SelectEventPlugin;
-},{"./EventConstants":23,"./EventPropagators":27,"./ReactDOMComponentTree":47,"./ReactInputSelection":76,"./SyntheticEvent":105,"./isTextInputElement":136,"fbjs/lib/ExecutionEnvironment":146,"fbjs/lib/getActiveElement":155,"fbjs/lib/keyOf":164,"fbjs/lib/shallowEqual":169}],100:[function(require,module,exports){
+},{"./EventConstants":28,"./EventPropagators":32,"./ReactDOMComponentTree":52,"./ReactInputSelection":81,"./SyntheticEvent":110,"./isTextInputElement":141,"fbjs/lib/ExecutionEnvironment":151,"fbjs/lib/getActiveElement":160,"fbjs/lib/keyOf":169,"fbjs/lib/shallowEqual":174}],105:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -37691,7 +38159,7 @@ var SimpleEventPlugin = {
 module.exports = SimpleEventPlugin;
 }).call(this,require('_process'))
 
-},{"./EventConstants":23,"./EventPropagators":27,"./ReactDOMComponentTree":47,"./SyntheticAnimationEvent":101,"./SyntheticClipboardEvent":102,"./SyntheticDragEvent":104,"./SyntheticEvent":105,"./SyntheticFocusEvent":106,"./SyntheticKeyboardEvent":108,"./SyntheticMouseEvent":109,"./SyntheticTouchEvent":110,"./SyntheticTransitionEvent":111,"./SyntheticUIEvent":112,"./SyntheticWheelEvent":113,"./getEventCharCode":125,"_process":3,"fbjs/lib/EventListener":145,"fbjs/lib/emptyFunction":152,"fbjs/lib/invariant":160,"fbjs/lib/keyOf":164}],101:[function(require,module,exports){
+},{"./EventConstants":28,"./EventPropagators":32,"./ReactDOMComponentTree":52,"./SyntheticAnimationEvent":106,"./SyntheticClipboardEvent":107,"./SyntheticDragEvent":109,"./SyntheticEvent":110,"./SyntheticFocusEvent":111,"./SyntheticKeyboardEvent":113,"./SyntheticMouseEvent":114,"./SyntheticTouchEvent":115,"./SyntheticTransitionEvent":116,"./SyntheticUIEvent":117,"./SyntheticWheelEvent":118,"./getEventCharCode":130,"_process":5,"fbjs/lib/EventListener":150,"fbjs/lib/emptyFunction":157,"fbjs/lib/invariant":165,"fbjs/lib/keyOf":169}],106:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -37731,7 +38199,7 @@ function SyntheticAnimationEvent(dispatchConfig, dispatchMarker, nativeEvent, na
 SyntheticEvent.augmentClass(SyntheticAnimationEvent, AnimationEventInterface);
 
 module.exports = SyntheticAnimationEvent;
-},{"./SyntheticEvent":105}],102:[function(require,module,exports){
+},{"./SyntheticEvent":110}],107:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -37770,7 +38238,7 @@ function SyntheticClipboardEvent(dispatchConfig, dispatchMarker, nativeEvent, na
 SyntheticEvent.augmentClass(SyntheticClipboardEvent, ClipboardEventInterface);
 
 module.exports = SyntheticClipboardEvent;
-},{"./SyntheticEvent":105}],103:[function(require,module,exports){
+},{"./SyntheticEvent":110}],108:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -37807,7 +38275,7 @@ function SyntheticCompositionEvent(dispatchConfig, dispatchMarker, nativeEvent, 
 SyntheticEvent.augmentClass(SyntheticCompositionEvent, CompositionEventInterface);
 
 module.exports = SyntheticCompositionEvent;
-},{"./SyntheticEvent":105}],104:[function(require,module,exports){
+},{"./SyntheticEvent":110}],109:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -37844,7 +38312,7 @@ function SyntheticDragEvent(dispatchConfig, dispatchMarker, nativeEvent, nativeE
 SyntheticMouseEvent.augmentClass(SyntheticDragEvent, DragEventInterface);
 
 module.exports = SyntheticDragEvent;
-},{"./SyntheticMouseEvent":109}],105:[function(require,module,exports){
+},{"./SyntheticMouseEvent":114}],110:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -38109,7 +38577,7 @@ function getPooledWarningPropertyDefinition(propName, getVal) {
 }
 }).call(this,require('_process'))
 
-},{"./PooledClass":32,"_process":3,"fbjs/lib/emptyFunction":152,"fbjs/lib/warning":170,"object-assign":171}],106:[function(require,module,exports){
+},{"./PooledClass":37,"_process":5,"fbjs/lib/emptyFunction":157,"fbjs/lib/warning":175,"object-assign":176}],111:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -38146,7 +38614,7 @@ function SyntheticFocusEvent(dispatchConfig, dispatchMarker, nativeEvent, native
 SyntheticUIEvent.augmentClass(SyntheticFocusEvent, FocusEventInterface);
 
 module.exports = SyntheticFocusEvent;
-},{"./SyntheticUIEvent":112}],107:[function(require,module,exports){
+},{"./SyntheticUIEvent":117}],112:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -38184,7 +38652,7 @@ function SyntheticInputEvent(dispatchConfig, dispatchMarker, nativeEvent, native
 SyntheticEvent.augmentClass(SyntheticInputEvent, InputEventInterface);
 
 module.exports = SyntheticInputEvent;
-},{"./SyntheticEvent":105}],108:[function(require,module,exports){
+},{"./SyntheticEvent":110}],113:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -38269,7 +38737,7 @@ function SyntheticKeyboardEvent(dispatchConfig, dispatchMarker, nativeEvent, nat
 SyntheticUIEvent.augmentClass(SyntheticKeyboardEvent, KeyboardEventInterface);
 
 module.exports = SyntheticKeyboardEvent;
-},{"./SyntheticUIEvent":112,"./getEventCharCode":125,"./getEventKey":126,"./getEventModifierState":127}],109:[function(require,module,exports){
+},{"./SyntheticUIEvent":117,"./getEventCharCode":130,"./getEventKey":131,"./getEventModifierState":132}],114:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -38342,7 +38810,7 @@ function SyntheticMouseEvent(dispatchConfig, dispatchMarker, nativeEvent, native
 SyntheticUIEvent.augmentClass(SyntheticMouseEvent, MouseEventInterface);
 
 module.exports = SyntheticMouseEvent;
-},{"./SyntheticUIEvent":112,"./ViewportMetrics":115,"./getEventModifierState":127}],110:[function(require,module,exports){
+},{"./SyntheticUIEvent":117,"./ViewportMetrics":120,"./getEventModifierState":132}],115:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -38388,7 +38856,7 @@ function SyntheticTouchEvent(dispatchConfig, dispatchMarker, nativeEvent, native
 SyntheticUIEvent.augmentClass(SyntheticTouchEvent, TouchEventInterface);
 
 module.exports = SyntheticTouchEvent;
-},{"./SyntheticUIEvent":112,"./getEventModifierState":127}],111:[function(require,module,exports){
+},{"./SyntheticUIEvent":117,"./getEventModifierState":132}],116:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -38428,7 +38896,7 @@ function SyntheticTransitionEvent(dispatchConfig, dispatchMarker, nativeEvent, n
 SyntheticEvent.augmentClass(SyntheticTransitionEvent, TransitionEventInterface);
 
 module.exports = SyntheticTransitionEvent;
-},{"./SyntheticEvent":105}],112:[function(require,module,exports){
+},{"./SyntheticEvent":110}],117:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -38488,7 +38956,7 @@ function SyntheticUIEvent(dispatchConfig, dispatchMarker, nativeEvent, nativeEve
 SyntheticEvent.augmentClass(SyntheticUIEvent, UIEventInterface);
 
 module.exports = SyntheticUIEvent;
-},{"./SyntheticEvent":105,"./getEventTarget":128}],113:[function(require,module,exports){
+},{"./SyntheticEvent":110,"./getEventTarget":133}],118:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -38543,7 +39011,7 @@ function SyntheticWheelEvent(dispatchConfig, dispatchMarker, nativeEvent, native
 SyntheticMouseEvent.augmentClass(SyntheticWheelEvent, WheelEventInterface);
 
 module.exports = SyntheticWheelEvent;
-},{"./SyntheticMouseEvent":109}],114:[function(require,module,exports){
+},{"./SyntheticMouseEvent":114}],119:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -38778,7 +39246,7 @@ var Transaction = {
 module.exports = Transaction;
 }).call(this,require('_process'))
 
-},{"_process":3,"fbjs/lib/invariant":160}],115:[function(require,module,exports){
+},{"_process":5,"fbjs/lib/invariant":165}],120:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -38806,7 +39274,7 @@ var ViewportMetrics = {
 };
 
 module.exports = ViewportMetrics;
-},{}],116:[function(require,module,exports){
+},{}],121:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2014-present, Facebook, Inc.
@@ -38869,7 +39337,7 @@ function accumulateInto(current, next) {
 module.exports = accumulateInto;
 }).call(this,require('_process'))
 
-},{"_process":3,"fbjs/lib/invariant":160}],117:[function(require,module,exports){
+},{"_process":5,"fbjs/lib/invariant":165}],122:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -38913,7 +39381,7 @@ function adler32(data) {
 }
 
 module.exports = adler32;
-},{}],118:[function(require,module,exports){
+},{}],123:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -38941,7 +39409,7 @@ if (process.env.NODE_ENV !== 'production') {
 module.exports = canDefineProperty;
 }).call(this,require('_process'))
 
-},{"_process":3}],119:[function(require,module,exports){
+},{"_process":5}],124:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -38974,7 +39442,7 @@ var createMicrosoftUnsafeLocalFunction = function (func) {
 };
 
 module.exports = createMicrosoftUnsafeLocalFunction;
-},{}],120:[function(require,module,exports){
+},{}],125:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -39055,7 +39523,7 @@ function dangerousStyleValue(name, value, component) {
 module.exports = dangerousStyleValue;
 }).call(this,require('_process'))
 
-},{"./CSSProperty":10,"_process":3,"fbjs/lib/warning":170}],121:[function(require,module,exports){
+},{"./CSSProperty":15,"_process":5,"fbjs/lib/warning":175}],126:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -39094,7 +39562,7 @@ function escapeTextContentForBrowser(text) {
 }
 
 module.exports = escapeTextContentForBrowser;
-},{}],122:[function(require,module,exports){
+},{}],127:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -39154,7 +39622,7 @@ function findDOMNode(componentOrElement) {
 module.exports = findDOMNode;
 }).call(this,require('_process'))
 
-},{"./ReactCurrentOwner":42,"./ReactDOMComponentTree":47,"./ReactInstanceMap":77,"./getNativeComponentFromComposite":130,"_process":3,"fbjs/lib/invariant":160,"fbjs/lib/warning":170}],123:[function(require,module,exports){
+},{"./ReactCurrentOwner":47,"./ReactDOMComponentTree":52,"./ReactInstanceMap":82,"./getNativeComponentFromComposite":135,"_process":5,"fbjs/lib/invariant":165,"fbjs/lib/warning":175}],128:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -39207,7 +39675,7 @@ function flattenChildren(children) {
 module.exports = flattenChildren;
 }).call(this,require('_process'))
 
-},{"./KeyEscapeUtils":30,"./traverseAllChildren":143,"_process":3,"fbjs/lib/warning":170}],124:[function(require,module,exports){
+},{"./KeyEscapeUtils":35,"./traverseAllChildren":148,"_process":5,"fbjs/lib/warning":175}],129:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -39238,7 +39706,7 @@ var forEachAccumulated = function (arr, cb, scope) {
 };
 
 module.exports = forEachAccumulated;
-},{}],125:[function(require,module,exports){
+},{}],130:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -39289,7 +39757,7 @@ function getEventCharCode(nativeEvent) {
 }
 
 module.exports = getEventCharCode;
-},{}],126:[function(require,module,exports){
+},{}],131:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -39392,7 +39860,7 @@ function getEventKey(nativeEvent) {
 }
 
 module.exports = getEventKey;
-},{"./getEventCharCode":125}],127:[function(require,module,exports){
+},{"./getEventCharCode":130}],132:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -39436,7 +39904,7 @@ function getEventModifierState(nativeEvent) {
 }
 
 module.exports = getEventModifierState;
-},{}],128:[function(require,module,exports){
+},{}],133:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -39472,7 +39940,7 @@ function getEventTarget(nativeEvent) {
 }
 
 module.exports = getEventTarget;
-},{}],129:[function(require,module,exports){
+},{}],134:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -39513,7 +39981,7 @@ function getIteratorFn(maybeIterable) {
 }
 
 module.exports = getIteratorFn;
-},{}],130:[function(require,module,exports){
+},{}],135:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -39544,7 +40012,7 @@ function getNativeComponentFromComposite(inst) {
 }
 
 module.exports = getNativeComponentFromComposite;
-},{"./ReactNodeTypes":85}],131:[function(require,module,exports){
+},{"./ReactNodeTypes":90}],136:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -39619,7 +40087,7 @@ function getNodeForCharacterOffset(root, offset) {
 }
 
 module.exports = getNodeForCharacterOffset;
-},{}],132:[function(require,module,exports){
+},{}],137:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -39653,7 +40121,7 @@ function getTextContentAccessor() {
 }
 
 module.exports = getTextContentAccessor;
-},{"fbjs/lib/ExecutionEnvironment":146}],133:[function(require,module,exports){
+},{"fbjs/lib/ExecutionEnvironment":151}],138:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -39755,7 +40223,7 @@ function getVendorPrefixedEventName(eventName) {
 }
 
 module.exports = getVendorPrefixedEventName;
-},{"fbjs/lib/ExecutionEnvironment":146}],134:[function(require,module,exports){
+},{"fbjs/lib/ExecutionEnvironment":151}],139:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -39870,7 +40338,7 @@ function instantiateReactComponent(node) {
 module.exports = instantiateReactComponent;
 }).call(this,require('_process'))
 
-},{"./ReactCompositeComponent":41,"./ReactEmptyComponent":70,"./ReactNativeComponent":84,"_process":3,"fbjs/lib/invariant":160,"fbjs/lib/warning":170,"object-assign":171}],135:[function(require,module,exports){
+},{"./ReactCompositeComponent":46,"./ReactEmptyComponent":75,"./ReactNativeComponent":89,"_process":5,"fbjs/lib/invariant":165,"fbjs/lib/warning":175,"object-assign":176}],140:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -39931,7 +40399,7 @@ function isEventSupported(eventNameSuffix, capture) {
 }
 
 module.exports = isEventSupported;
-},{"fbjs/lib/ExecutionEnvironment":146}],136:[function(require,module,exports){
+},{"fbjs/lib/ExecutionEnvironment":151}],141:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -39973,7 +40441,7 @@ function isTextInputElement(elem) {
 }
 
 module.exports = isTextInputElement;
-},{}],137:[function(require,module,exports){
+},{}],142:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -40010,7 +40478,7 @@ function onlyChild(children) {
 module.exports = onlyChild;
 }).call(this,require('_process'))
 
-},{"./ReactElement":68,"_process":3,"fbjs/lib/invariant":160}],138:[function(require,module,exports){
+},{"./ReactElement":73,"_process":5,"fbjs/lib/invariant":165}],143:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -40037,7 +40505,7 @@ function quoteAttributeValueForBrowser(value) {
 }
 
 module.exports = quoteAttributeValueForBrowser;
-},{"./escapeTextContentForBrowser":121}],139:[function(require,module,exports){
+},{"./escapeTextContentForBrowser":126}],144:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -40054,7 +40522,7 @@ module.exports = quoteAttributeValueForBrowser;
 var ReactMount = require('./ReactMount');
 
 module.exports = ReactMount.renderSubtreeIntoContainer;
-},{"./ReactMount":81}],140:[function(require,module,exports){
+},{"./ReactMount":86}],145:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -40137,7 +40605,7 @@ if (ExecutionEnvironment.canUseDOM) {
 }
 
 module.exports = setInnerHTML;
-},{"./createMicrosoftUnsafeLocalFunction":119,"fbjs/lib/ExecutionEnvironment":146}],141:[function(require,module,exports){
+},{"./createMicrosoftUnsafeLocalFunction":124,"fbjs/lib/ExecutionEnvironment":151}],146:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -40178,7 +40646,7 @@ if (ExecutionEnvironment.canUseDOM) {
 }
 
 module.exports = setTextContent;
-},{"./escapeTextContentForBrowser":121,"./setInnerHTML":140,"fbjs/lib/ExecutionEnvironment":146}],142:[function(require,module,exports){
+},{"./escapeTextContentForBrowser":126,"./setInnerHTML":145,"fbjs/lib/ExecutionEnvironment":151}],147:[function(require,module,exports){
 /**
  * Copyright 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -40221,7 +40689,7 @@ function shouldUpdateReactComponent(prevElement, nextElement) {
 }
 
 module.exports = shouldUpdateReactComponent;
-},{}],143:[function(require,module,exports){
+},{}],148:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2013-present, Facebook, Inc.
@@ -40383,7 +40851,7 @@ function traverseAllChildren(children, callback, traverseContext) {
 module.exports = traverseAllChildren;
 }).call(this,require('_process'))
 
-},{"./KeyEscapeUtils":30,"./ReactCurrentOwner":42,"./ReactElement":68,"./getIteratorFn":129,"_process":3,"fbjs/lib/invariant":160,"fbjs/lib/warning":170}],144:[function(require,module,exports){
+},{"./KeyEscapeUtils":35,"./ReactCurrentOwner":47,"./ReactElement":73,"./getIteratorFn":134,"_process":5,"fbjs/lib/invariant":165,"fbjs/lib/warning":175}],149:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2015-present, Facebook, Inc.
@@ -40756,7 +41224,7 @@ if (process.env.NODE_ENV !== 'production') {
 module.exports = validateDOMNesting;
 }).call(this,require('_process'))
 
-},{"_process":3,"fbjs/lib/emptyFunction":152,"fbjs/lib/warning":170,"object-assign":171}],145:[function(require,module,exports){
+},{"_process":5,"fbjs/lib/emptyFunction":157,"fbjs/lib/warning":175,"object-assign":176}],150:[function(require,module,exports){
 (function (process){
 'use strict';
 
@@ -40843,7 +41311,7 @@ var EventListener = {
 module.exports = EventListener;
 }).call(this,require('_process'))
 
-},{"./emptyFunction":152,"_process":3}],146:[function(require,module,exports){
+},{"./emptyFunction":157,"_process":5}],151:[function(require,module,exports){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -40879,7 +41347,7 @@ var ExecutionEnvironment = {
 };
 
 module.exports = ExecutionEnvironment;
-},{}],147:[function(require,module,exports){
+},{}],152:[function(require,module,exports){
 "use strict";
 
 /**
@@ -40911,7 +41379,7 @@ function camelize(string) {
 }
 
 module.exports = camelize;
-},{}],148:[function(require,module,exports){
+},{}],153:[function(require,module,exports){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -40951,7 +41419,7 @@ function camelizeStyleName(string) {
 }
 
 module.exports = camelizeStyleName;
-},{"./camelize":147}],149:[function(require,module,exports){
+},{"./camelize":152}],154:[function(require,module,exports){
 'use strict';
 
 /**
@@ -40995,7 +41463,7 @@ function containsNode(outerNode, innerNode) {
 }
 
 module.exports = containsNode;
-},{"./isTextNode":162}],150:[function(require,module,exports){
+},{"./isTextNode":167}],155:[function(require,module,exports){
 (function (process){
 'use strict';
 
@@ -41125,7 +41593,7 @@ function createArrayFromMixed(obj) {
 module.exports = createArrayFromMixed;
 }).call(this,require('_process'))
 
-},{"./invariant":160,"_process":3}],151:[function(require,module,exports){
+},{"./invariant":165,"_process":5}],156:[function(require,module,exports){
 (function (process){
 'use strict';
 
@@ -41212,7 +41680,7 @@ function createNodesFromMarkup(markup, handleScript) {
 module.exports = createNodesFromMarkup;
 }).call(this,require('_process'))
 
-},{"./ExecutionEnvironment":146,"./createArrayFromMixed":150,"./getMarkupWrap":156,"./invariant":160,"_process":3}],152:[function(require,module,exports){
+},{"./ExecutionEnvironment":151,"./createArrayFromMixed":155,"./getMarkupWrap":161,"./invariant":165,"_process":5}],157:[function(require,module,exports){
 "use strict";
 
 /**
@@ -41250,7 +41718,7 @@ emptyFunction.thatReturnsArgument = function (arg) {
 };
 
 module.exports = emptyFunction;
-},{}],153:[function(require,module,exports){
+},{}],158:[function(require,module,exports){
 (function (process){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
@@ -41273,7 +41741,7 @@ if (process.env.NODE_ENV !== 'production') {
 module.exports = emptyObject;
 }).call(this,require('_process'))
 
-},{"_process":3}],154:[function(require,module,exports){
+},{"_process":5}],159:[function(require,module,exports){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -41300,7 +41768,7 @@ function focusNode(node) {
 }
 
 module.exports = focusNode;
-},{}],155:[function(require,module,exports){
+},{}],160:[function(require,module,exports){
 'use strict';
 
 /**
@@ -41335,7 +41803,7 @@ function getActiveElement() /*?DOMElement*/{
 }
 
 module.exports = getActiveElement;
-},{}],156:[function(require,module,exports){
+},{}],161:[function(require,module,exports){
 (function (process){
 'use strict';
 
@@ -41433,7 +41901,7 @@ function getMarkupWrap(nodeName) {
 module.exports = getMarkupWrap;
 }).call(this,require('_process'))
 
-},{"./ExecutionEnvironment":146,"./invariant":160,"_process":3}],157:[function(require,module,exports){
+},{"./ExecutionEnvironment":151,"./invariant":165,"_process":5}],162:[function(require,module,exports){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -41472,7 +41940,7 @@ function getUnboundedScrollPosition(scrollable) {
 }
 
 module.exports = getUnboundedScrollPosition;
-},{}],158:[function(require,module,exports){
+},{}],163:[function(require,module,exports){
 'use strict';
 
 /**
@@ -41505,7 +41973,7 @@ function hyphenate(string) {
 }
 
 module.exports = hyphenate;
-},{}],159:[function(require,module,exports){
+},{}],164:[function(require,module,exports){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -41544,7 +42012,7 @@ function hyphenateStyleName(string) {
 }
 
 module.exports = hyphenateStyleName;
-},{"./hyphenate":158}],160:[function(require,module,exports){
+},{"./hyphenate":163}],165:[function(require,module,exports){
 (function (process){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
@@ -41597,7 +42065,7 @@ function invariant(condition, format, a, b, c, d, e, f) {
 module.exports = invariant;
 }).call(this,require('_process'))
 
-},{"_process":3}],161:[function(require,module,exports){
+},{"_process":5}],166:[function(require,module,exports){
 'use strict';
 
 /**
@@ -41620,7 +42088,7 @@ function isNode(object) {
 }
 
 module.exports = isNode;
-},{}],162:[function(require,module,exports){
+},{}],167:[function(require,module,exports){
 'use strict';
 
 /**
@@ -41645,7 +42113,7 @@ function isTextNode(object) {
 }
 
 module.exports = isTextNode;
-},{"./isNode":161}],163:[function(require,module,exports){
+},{"./isNode":166}],168:[function(require,module,exports){
 (function (process){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
@@ -41696,7 +42164,7 @@ var keyMirror = function (obj) {
 module.exports = keyMirror;
 }).call(this,require('_process'))
 
-},{"./invariant":160,"_process":3}],164:[function(require,module,exports){
+},{"./invariant":165,"_process":5}],169:[function(require,module,exports){
 "use strict";
 
 /**
@@ -41731,7 +42199,7 @@ var keyOf = function (oneKeyObj) {
 };
 
 module.exports = keyOf;
-},{}],165:[function(require,module,exports){
+},{}],170:[function(require,module,exports){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -41782,7 +42250,7 @@ function mapObject(object, callback, context) {
 }
 
 module.exports = mapObject;
-},{}],166:[function(require,module,exports){
+},{}],171:[function(require,module,exports){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -41814,7 +42282,7 @@ function memoizeStringOnly(callback) {
 }
 
 module.exports = memoizeStringOnly;
-},{}],167:[function(require,module,exports){
+},{}],172:[function(require,module,exports){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -41837,7 +42305,7 @@ if (ExecutionEnvironment.canUseDOM) {
 }
 
 module.exports = performance || {};
-},{"./ExecutionEnvironment":146}],168:[function(require,module,exports){
+},{"./ExecutionEnvironment":151}],173:[function(require,module,exports){
 'use strict';
 
 /**
@@ -41871,7 +42339,7 @@ if (performance.now) {
 }
 
 module.exports = performanceNow;
-},{"./performance":167}],169:[function(require,module,exports){
+},{"./performance":172}],174:[function(require,module,exports){
 /**
  * Copyright (c) 2013-present, Facebook, Inc.
  * All rights reserved.
@@ -41938,7 +42406,7 @@ function shallowEqual(objA, objB) {
 }
 
 module.exports = shallowEqual;
-},{}],170:[function(require,module,exports){
+},{}],175:[function(require,module,exports){
 (function (process){
 /**
  * Copyright 2014-2015, Facebook, Inc.
@@ -41998,7 +42466,7 @@ if (process.env.NODE_ENV !== 'production') {
 module.exports = warning;
 }).call(this,require('_process'))
 
-},{"./emptyFunction":152,"_process":3}],171:[function(require,module,exports){
+},{"./emptyFunction":157,"_process":5}],176:[function(require,module,exports){
 'use strict';
 /* eslint-disable no-unused-vars */
 var hasOwnProperty = Object.prototype.hasOwnProperty;
@@ -42083,10 +42551,10 @@ module.exports = shouldUseNative() ? Object.assign : function (target, source) {
 	return to;
 };
 
-},{}],172:[function(require,module,exports){
+},{}],177:[function(require,module,exports){
 'use strict';
 
 module.exports = require('./lib/React');
 
-},{"./lib/React":33}]},{},[1])
+},{"./lib/React":38}]},{},[2])
 //# sourceMappingURL=build.js.map
