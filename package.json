@@ -29,6 +29,7 @@
     "babelify": "^7.2.0",
     "browserify": "^13.0.0",
     "browserify-shim": "^3.8.12",
+    "eslint-plugin-react": "^5.1.1",
     "exorcist": "^0.4.0",
     "live-server": "^1.0.0",
     "watchify": "^3.7.0"
