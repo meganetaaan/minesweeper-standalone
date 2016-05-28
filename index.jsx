@@ -4,7 +4,7 @@ import ReactDOM from 'react-dom';
 import Timer from 'countup-timer';
 import TimeFormatUtil from './formatter';
 import {EventEmitter} from 'events';
-const timer = new Timer();
+
 const PHASE = {
   READY: 'READY',
   PLAYING: 'PLAYING',
@@ -12,27 +12,115 @@ const PHASE = {
   CABOOM: 'CABOOM'
 };
 
+const mineNumColor = {
+  1: '#1976D2',
+  2: '#388E3C',
+  3: '#D32F2F',
+  4: '#283593',
+  5: '#5D4037',
+  6: '#0097A7',
+  7: '#7B1FA2',
+  8: '#212121'
+};
+
+const style = {
+  title: {
+    marginLeft: '40px',
+    marginRight: 'auto',
+    fontSize: '1.2em',
+    color: '#FAFAFA'
+  },
+  appContainer: {
+    minHeight: '100vh',
+    display: 'flex',
+    flexDirection: 'column',
+    userSelect: 'none',
+    fontFamily: '"游ゴシック", YuGothic, "Hiragino Kaku Gothic ProN", "Hiragino Kaku Gothic Pro", "ＭＳ ゴシック", sans-serif'
+  },
+  header: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '42px',
+    marginBottom: '4px',
+    //backgroundColor: '#37474F',
+    backgroundColor: '#BF360C',
+    boxShadow: '0 0 4px rgba(0,0,0,.7),0 2px 4px rgba(0,0,0,.14)',
+    zIndex: 2
+  },
+  timer: {
+    width: '200px',
+    height: '1.4em',
+    fontSize: '1.2em',
+    fontWeight: 'bold',
+    textAlign: 'center',
+    color: '#FAFAFA'
+  },
+  field: {
+    flex: 1,
+    width: 'calc(100vmin - 48px)',
+    height: 'calc(100vmin - 48px)',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    margin: 'auto',
+    /*
+       width: '100%',
+       height: '100%',
+       */
+    textAlign: 'center',
+    fontSize: '1.2em',
+    borderCollapse: 'collapse',
+    fontWeight: 'bold',
+    tableLayout: 'fixed',
+    backgroundColor: '#FAFAFA',
+    boxShadow: '0 0 2px rgba(0,0,0,.7),0 2px 4px rgba(0,0,0,.14)'
+  },
+  cell: {
+    color: '#757575',
+    border: '1px solid #E0E0E0'
+  }
+};
+
 class AppContainer extends React.Component {
   constructor(...args) {
     super(...args);
     this.state = {
-      phase: PHASE.READY
+      level: 'BEGINNER'
     };
-    this.timer = new Timer();
     this.emitter = new EventEmitter();
-    this.emitter.on('openCell', cell=>{
-      if(this.state.phase === PHASE.READY){
-        this.timer.start();
-        this.state.phase = PHASE.PLAYING;
-      }
-      if([PHASE.CABOOM, PHASE.CLEARED].indexOf(this._status) !== -1){
-        this._reset();
-      }
-      this._mineSweeperLogic.open(cell.row, cell.col);
-    });
   }
+
+  onChangeLevel(e){
+    const level = e.target.value;
+    this.setState({level: level});
+    this.emitter.emit('change-level', level);
+  }
+
+  //TODO: make Header Component
   render(){
-    return <Field field={this.field} dispatch={this.emitter.emit.bind(this.emitter)} />;
+    return <div>
+    <div class={"app-container"}
+    style={style.appContainer}>
+    <div class={"header"}
+    style={style.header}>
+    <div style={style.title}>MineSweeper</div>
+    <select onChange={this.onChangeLevel.bind(this)}>
+    <option value="BEGINNER">BEGINNER</option>
+    <option value="INTERMEDIATE">INTERMEDIATE</option>
+    </select>
+    <TimerCount
+    emitter={this.emitter}
+    />
+    </div>
+    <Field
+    field={this.field}
+    emitter={this.emitter}
+    dispatch={this.emitter.emit.bind(this.emitter)}
+    level={this.state.level} />
+    </div>
+    </div>;
   }
 }
 
@@ -40,58 +128,114 @@ class Field extends React.Component {
   constructor(...args) {
     super(...args);
     this._mineSweeperLogic = new MineSweeperLogic();
-    const data = this._mineSweeperLogic.getNewField();
-    this.state = {
-      field: data.field,
-      flags: data.flags
-    };
-    this.emitter = this.props.emitter || new EventEmitter();
-    this.emitter.on('change-field', (field, flags) => {
+    this.emitter = this.props.emitter || new EventEmitter;
+    this.dispatch = this.props.dispatch;
+
+    this.emitter.on('change-field', ({field, flags}) => {
       this.setState({field, flags});
     });
+    this.emitter.on('change-level', (level)=>{
+      this._reset(level);
+    });
+
     this.emitter.on('openCell', cell=>{
+      if(this.state.phase === PHASE.READY){
+        this.state.phase = PHASE.PLAYING;
+        this.dispatch('change-phase', PHASE.PLAYING);
+      }
+      if([PHASE.CABOOM, PHASE.CLEARED].indexOf(this.state.phase) !== -1){
+        this._reset(this.props.level);
+        return;
+      }
       const result = this._mineSweeperLogic.open(cell.row, cell.col);
-      this.emitter.dispatch('change-field', (result.field, result.flags));
+      if(result.status === 'ERROR'){
+        return;
+      } else if(result.status === 'CLEARED'){
+        this.state.phase = 'CLEARED';
+        this.dispatch('change-phase', PHASE.CLEARED);
+      } else if(result.status === 'CABOOM'){
+        this.state.phase = 'CABOOM';
+        this.dispatch('change-phase', PHASE.CABOOM);
+      }
+      this.dispatch('change-field', {
+        field: result.field,
+        flags: result.flags
+      });
     });
+
     this.emitter.on('flagCell', cell=>{
-      this._mineSweeperLogic.flag(cell.row, cell.col);
+      const result = this._mineSweeperLogic.flag(cell.row, cell.col);
+      this.dispatch('change-field', {
+        field: result.field,
+        flags: result.flags
+      });
     });
+
+    const level = this.props.level || 'BEGINNER';
+    const data = this._mineSweeperLogic.getNewField(level);
+    this.state = {
+      field: data.field,
+      flags: data.flags,
+      phase: PHASE.READY
+    };
   }
+
+  _reset(level){
+    const data = this._mineSweeperLogic.getNewField(level);
+    this.setState({
+      field: data.field,
+      flags: data.flags,
+      phase: PHASE.READY
+    });
+    this.dispatch('change-phase', PHASE.READY);
+  }
+
   render() {
-    return <table data-mine-status={this.props.status}>
+    return <table
+    style={style.field}
+    data-mine-status={this.props.status}>
     <tbody>
-    {this.props.field.map((row, rowNum) =>
-                          <tr>
-                          {row.map((mineNum, colNum)=>
-                                   <Cell
-                                   key={rowNum + '_' + colNum}
-                                   dispatch={this.props.dispatch}
-                                   cell={
-                                     {
-                                       nabors: mineNum,
-                                       flag: this.props.flags[rowNum][colNum],
-                                       isOpened: mineNum !== null,
-                                       row: rowNum,
-                                       col: colNum
-                                     }
-                                   }/>
-                                  )}
-                                  </tr>
-                         )};
-                         </tbody>
-                         </table>;
+    {this.state.field.map(
+      (row, rowNum) =>
+      <tr key={rowNum}>
+      {row.map(
+        (mineNum, colNum)=>
+        <Cell
+        key={rowNum + '_' + colNum}
+        dispatch={this.props.dispatch}
+        cell={
+          {
+            mineNum: mineNum,
+            flag: this.state.flags[rowNum][colNum],
+            isOpened: mineNum !== null,
+            row: rowNum,
+            col: colNum,
+            phase: this.state.phase
+          }
+        }/>
+      )}
+      </tr>
+    )}
+    </tbody>
+    </table>;
   }
 }
 
 class Cell extends React.Component {
-  _onOpenCell(){
-    this.props.dispatch('openCell', {
-      row: this.props.cell.row,
-      col: this.props.cell.col
-    });
+  _onClick(){
+    if(this.props.cell.flag){
+      return;
+    } else {
+      this.props.dispatch('openCell', {
+        row: this.props.cell.row,
+        col: this.props.cell.col
+      });
+    }
   }
-  _onFlagCell(){
-    if(this.props.cell.isOpened){
+  _onContextMenu(ev){
+    ev.preventDefault();
+    const phase = this.props.cell.phase;
+    if([PHASE.CABOOM, PHASE.CLEARED].indexOf(phase) !== -1 || this.props.cell.isOpened){
       return;
     }
     this.props.dispatch('flagCell', {
@@ -103,23 +247,25 @@ class Cell extends React.Component {
     if(cell.flag){
       return '\u2690'; // Flag symbol
     }
-    if(cell.nabors == 0 || cell.isOpened === false){
+    if(cell.mineNum == 0 || cell.isOpened === false){
       return '　';
     } else {
-      return cell.nabors === -1 ? '\ud83d\udca3' : cell.nabors;
+      return cell.mineNum === -1 ? '\ud83d\udca3' : cell.mineNum;
     }
   }
   render() {
     const cell = this.props.cell;
-    return <td className="cell"
-    onClick={this._onOpenCell.bind(this)}
-    onContextMenu={this._onOpenCell.bind(this)}
-    data-mine-isopened={cell.isOpened}
-    data-mine-col={cell.col}
-    data-mine-row={cell.row}
-    data-mine-num={cell.nabors}
-    data-mine-flag={cell.flag}>
-    <div>
+    const color = {color: mineNumColor[cell.mineNum]};
+    const zeroStyle = cell.isOpened ? {backgroundColor: '#EEEEEE'} : {};
+    const mineStyle = cell.mineNum === -1 ? {backgroundColor: '#E64A19', color: '#FAFAFA'} : {};
+    const clearedStyle = cell.phase === PHASE.CLEARED && !cell.isOpened ? {backgroundColor: '#00E676', color: '#FAFAFA'} : {};
+    const cellStyle = Object.assign({}, style.cell, zeroStyle, color, mineStyle, clearedStyle);
+    return <td
+    style={cellStyle}
+    onClick={this._onClick.bind(this)}
+    onContextMenu={this._onContextMenu.bind(this)}
+    >
+    <div style={{maxHeight: '1.4em', overflow: 'hidden'}}>
     {this._mineNumber(cell)}
     </div>
     </td>;
@@ -130,7 +276,8 @@ class MineSweeperLogic {
   constructor(){
     this._mine = null;
     this._flags = null;
-    this._LEVELS = {
+    this._totalMineNum = null;
+    this.LEVELS = {
       BEGINNER: {
         rowNum: 9,
         colNum: 9,
@@ -142,8 +289,8 @@ class MineSweeperLogic {
         mineNum: 40
       },
       EXPERT: {
-        rowNum: 30,
-        colNum: 16,
+        rowNum: 16,
+        colNum: 30,
         mineNum: 99
       }
     };
@@ -173,9 +320,10 @@ class MineSweeperLogic {
     });
   }
 
-  getNewField(){
-    const level = this._LEVELS.INTERMEDIATE;
-    this._mine = new MineSweeper(level.rowNum, level.colNum, level.mineNum);
+  getNewField(level){
+    const lv = (level && this.LEVELS[level] ) || this.LEVELS.INTERMEDIATE;
+    this._mine = new MineSweeper(lv.rowNum, lv.colNum, lv.mineNum);
+    this._totalMineNum = lv.mineNum;
     this._flags = this._createFlags();
     return this.getField();
   }
@@ -206,86 +354,39 @@ class MineSweeperLogic {
   }
 }
 
-const mineSweeperController = {
-  _mineSweeperLogic: mineSweeperLogic,
-  _status: null,
+class TimerCount extends React.Component{
+  constructor(...args){
+    super(...args);
+    this.state = {
+      milliseconds: 0
+    };
 
-  _reset: function(){
-    this._render(this._mineSweeperLogic.getNewField());
-    timer.reset();
-    this._status = STATUS.READY;
-  },
+    this.timer = new Timer();
+    this.timer.on('start', data => { this.setState(data); });
+    this.timer.on('reset', data => { this.setState(data); });
+    this.timer.on('frame', data => { this.setState(data); });
 
-  '.cell click': function(context, $el) {
-    if([STATUS.CABOOM, STATUS.CLEARED].indexOf(this._status) !== -1){
-      this._reset();
-    } else if($el.attr('data-mine-flag') === 'true'){
-      return;
-    } else {
-      const row = Number($el.attr('data-mine-row'));
-      const col = Number($el.attr('data-mine-col'));
-      const result = this._mineSweeperLogic.open(row, col);
-
-      if(result.status === 'ERROR'){
-        this.log.error(result.message);
-        return;
-      } else if(result.status === 'CLEARED'){
-        this._status = STATUS.CLEARED;
-        timer.stop();
-      } else if(result.status === 'CABOOM'){
-        this._status = STATUS.CABOOM;
-        timer.stop();
+    this.emitter = this.props.emitter;
+    this.emitter.on('change-phase', (phase)=> {
+      if(phase === PHASE.READY){
+        this.timer.reset();
+      } else if(phase === PHASE.CLEARED || phase === PHASE.CABOOM){
+        this.timer.stop();
+      } else if(phase === PHASE.PLAYING){
+        this.timer.start();
       }
-      this._render(result);
-    }
-  },
 
-  '.cell contextmenu': function(context, $el) {
-    context.event.preventDefault();
-    const isOpened = $el.attr('data-mine-isopened') === 'true';
-    if(isOpened || this._isCaboom){
-      return;
-    } else {
-      const row = Number($el.attr('data-mine-row'));
-      const col = Number($el.attr('data-mine-col'));
-      this._render(this._mineSweeperLogic.flag(row, col));
-    }
-  }
-};
-
-const TimerCount = props => {
-  return <div className="timer">
-  {TimeFormatUtil.formatTimeString(props.milliseconds)}
-  {TimeFormatUtil.formatMsecString(props.milliseconds)}
-  </div>
-};
-
-const timerController = {
-  __name: 'minesweeper.TimerController',
-  _render: function(data){
-    ReactDOM.render(
-      <TimerCount milliseconds={data.milliseconds}/>,
-        this.rootElement
-    );
-  },
-
-  __ready: function(){
-    const timerDom = document.createElement('div');
-    timerDom.setAttribute('class', 'timer');
-    this.rootElement.appendChild(timerDom)
-    this._render({milliseconds: 0});
-
-    timer.on('start', data => {
-      this._render(data);
-    });
-    timer.on('reset', data => {
-      this._render(data);
-    });
-    timer.on('frame', data => {
-      this._render(data);
     });
   }
-};
+  render(){
+    return <div className="timer"
+    style={style.timer}>
+    {'\u25F4'}&nbsp;
+    {TimeFormatUtil.formatTimeString(this.state.milliseconds)}
+    {TimeFormatUtil.formatMsecString(this.state.milliseconds)}
+    </div>;
+  }
+}
 
 ReactDOM.render(
   <AppContainer/>,
