@@ -25,8 +25,8 @@ const mineNumColor = {
 
 const style = {
   title: {
+    flex: 3,
     marginLeft: '40px',
-    marginRight: 'auto',
     fontSize: '1.2em',
     color: '#FAFAFA'
   },
@@ -43,15 +43,26 @@ const style = {
     justifyContent: 'center',
     height: '42px',
     marginBottom: '4px',
-    //backgroundColor: '#37474F',
+    fontSize: '1.1em',
     backgroundColor: '#BF360C',
     boxShadow: '0 0 4px rgba(0,0,0,.7),0 2px 4px rgba(0,0,0,.14)',
     zIndex: 2
   },
+  levelSelect: {
+    flex: 1,
+    textAlign: 'center'
+  },
+  flagAndMineCount: {
+    flex: 1,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    color: '#FAFAFA'
+  },
   timer: {
+    flex: 1,
     width: '200px',
     height: '1.4em',
-    fontSize: '1.2em',
+    fontSize: '1.1em',
     fontWeight: 'bold',
     textAlign: 'center',
     color: '#FAFAFA'
@@ -83,9 +94,17 @@ class AppContainer extends React.Component {
   constructor(...args) {
     super(...args);
     this.state = {
-      level: 'BEGINNER'
+      level: 'BEGINNER',
+      totalMineNum: 0,
+      flagNum: 0
     };
     this.emitter = new EventEmitter();
+    this.emitter.on('change-field', ({flags, totalMineNum})=>{
+      if(totalMineNum){
+        this.setState({totalMineNum});
+      }
+      this.setState({flagNum: this._countFlag(flags)});
+    });
   }
 
   onChangeLevel(e){
@@ -102,10 +121,14 @@ class AppContainer extends React.Component {
     <div class={"header"}
     style={style.header}>
     <div style={style.title}>MineSweeper</div>
-    <select onChange={this.onChangeLevel.bind(this)}>
+    <select style={style.levelSelect} onChange={this.onChangeLevel.bind(this)}>
     <option value="BEGINNER">BEGINNER</option>
     <option value="INTERMEDIATE">INTERMEDIATE</option>
     </select>
+    <FlagAndMineCount 
+    flagNum={this.state.flagNum}
+    totalMineNum={this.state.totalMineNum}
+    />
     <TimerCount
     emitter={this.emitter}
     />
@@ -118,6 +141,13 @@ class AppContainer extends React.Component {
     </div>
     </div>;
   }
+
+  _countFlag(flags){
+    return flags.reduce((prev, current)=>{
+      return prev + current.reduce((prev, current)=>{
+        return prev + current;});
+    }, 0);
+  }
 }
 
 class Field extends React.Component {
@@ -126,14 +156,20 @@ class Field extends React.Component {
     this._mineSweeperLogic = new MineSweeperLogic();
     this.emitter = this.props.emitter || new EventEmitter;
     this.dispatch = this.props.dispatch;
+    this.state = {
+      field: [[]],
+      flags: [[]],
+      phase: PHASE.READY
+    };
+  }
 
+  componentDidMount(){
     this.emitter.on('change-field', ({field, flags}) => {
       this.setState({field, flags});
     });
     this.emitter.on('change-level', (level)=>{
       this._reset(level);
     });
-
     this.emitter.on('openCell', cell=>{
       if(this.state.phase === PHASE.READY){
         this.state.phase = PHASE.PLAYING;
@@ -158,7 +194,6 @@ class Field extends React.Component {
         flags: result.flags
       });
     });
-
     this.emitter.on('flagCell', cell=>{
       const result = this._mineSweeperLogic.flag(cell.row, cell.col);
       this.dispatch('change-field', {
@@ -166,23 +201,26 @@ class Field extends React.Component {
         flags: result.flags
       });
     });
-
     const level = this.props.level || 'BEGINNER';
+    this._reset(level);
+    /*
     const data = this._mineSweeperLogic.getNewField(level);
     this.state = {
       field: data.field,
       flags: data.flags,
       phase: PHASE.READY
     };
+    */
   }
 
   _reset(level){
     const data = this._mineSweeperLogic.getNewField(level);
-    this.setState({
+    this.dispatch('change-field', {
       field: data.field,
       flags: data.flags,
-      phase: PHASE.READY
+      totalMineNum: this._mineSweeperLogic.getTotalMineNum()
     });
+    this.state.phase = PHASE.READY;
     this.dispatch('change-phase', PHASE.READY);
   }
 
@@ -272,6 +310,8 @@ class MineSweeperLogic {
   constructor(){
     this._mine = null;
     this._flags = null;
+
+    // TODO: This should be managed by the engine itself
     this._totalMineNum = null;
     this.LEVELS = {
       BEGINNER: {
@@ -337,6 +377,10 @@ class MineSweeperLogic {
     return this._mine.colNum;
   }
 
+  getTotalMineNum(){
+    return this._totalMineNum;
+  }
+
   open(row, col){
     return this._mixFlag(this._mine.open(row, col));
   }
@@ -347,6 +391,17 @@ class MineSweeperLogic {
     }
     this._flags[row][col] = this._rotateFlag(this._flags[row][col]);
     return this.getField();
+  }
+}
+
+class FlagAndMineCount extends React.Component{
+  render(){
+    return <div className="flagAndMineCount"
+    style={style.flagAndMineCount}>
+    {'\u2690'}&nbsp;{this.props.flagNum}
+    {'/'}
+    {'\ud83d\udca3'}&nbsp;{this.props.totalMineNum}
+    </div>;
   }
 }
 

@@ -75,8 +75,8 @@ var mineNumColor = {
 
 var style = {
   title: {
+    flex: 3,
     marginLeft: '40px',
-    marginRight: 'auto',
     fontSize: '1.2em',
     color: '#FAFAFA'
   },
@@ -93,15 +93,26 @@ var style = {
     justifyContent: 'center',
     height: '42px',
     marginBottom: '4px',
-    //backgroundColor: '#37474F',
+    fontSize: '1.1em',
     backgroundColor: '#BF360C',
     boxShadow: '0 0 4px rgba(0,0,0,.7),0 2px 4px rgba(0,0,0,.14)',
     zIndex: 2
   },
+  levelSelect: {
+    flex: 1,
+    textAlign: 'center'
+  },
+  flagAndMineCount: {
+    flex: 1,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    color: '#FAFAFA'
+  },
   timer: {
+    flex: 1,
     width: '200px',
     height: '1.4em',
-    fontSize: '1.2em',
+    fontSize: '1.1em',
     fontWeight: 'bold',
     textAlign: 'center',
     color: '#FAFAFA'
@@ -144,9 +155,20 @@ var AppContainer = function (_React$Component) {
     var _this = _possibleConstructorReturn(this, (_Object$getPrototypeO = Object.getPrototypeOf(AppContainer)).call.apply(_Object$getPrototypeO, [this].concat(args)));
 
     _this.state = {
-      level: 'BEGINNER'
+      level: 'BEGINNER',
+      totalMineNum: 0,
+      flagNum: 0
     };
     _this.emitter = new _events.EventEmitter();
+    _this.emitter.on('change-field', function (_ref) {
+      var flags = _ref.flags;
+      var totalMineNum = _ref.totalMineNum;
+
+      if (totalMineNum) {
+        _this.setState({ totalMineNum: totalMineNum });
+      }
+      _this.setState({ flagNum: _this._countFlag(flags) });
+    });
     return _this;
   }
 
@@ -181,7 +203,7 @@ var AppContainer = function (_React$Component) {
             ),
             _react2.default.createElement(
               'select',
-              { onChange: this.onChangeLevel.bind(this) },
+              { style: style.levelSelect, onChange: this.onChangeLevel.bind(this) },
               _react2.default.createElement(
                 'option',
                 { value: 'BEGINNER' },
@@ -193,6 +215,10 @@ var AppContainer = function (_React$Component) {
                 'INTERMEDIATE'
               )
             ),
+            _react2.default.createElement(FlagAndMineCount, {
+              flagNum: this.state.flagNum,
+              totalMineNum: this.state.totalMineNum
+            }),
             _react2.default.createElement(TimerCount, {
               emitter: this.emitter
             })
@@ -204,6 +230,15 @@ var AppContainer = function (_React$Component) {
             level: this.state.level })
         )
       );
+    }
+  }, {
+    key: '_countFlag',
+    value: function _countFlag(flags) {
+      return flags.reduce(function (prev, current) {
+        return prev + current.reduce(function (prev, current) {
+          return prev + current;
+        });
+      }, 0);
     }
   }]);
 
@@ -227,75 +262,86 @@ var Field = function (_React$Component2) {
     _this2._mineSweeperLogic = new MineSweeperLogic();
     _this2.emitter = _this2.props.emitter || new _events.EventEmitter();
     _this2.dispatch = _this2.props.dispatch;
-
-    _this2.emitter.on('change-field', function (_ref) {
-      var field = _ref.field;
-      var flags = _ref.flags;
-
-      _this2.setState({ field: field, flags: flags });
-    });
-    _this2.emitter.on('change-level', function (level) {
-      _this2._reset(level);
-    });
-
-    _this2.emitter.on('openCell', function (cell) {
-      if (_this2.state.phase === PHASE.READY) {
-        _this2.state.phase = PHASE.PLAYING;
-        _this2.dispatch('change-phase', PHASE.PLAYING);
-      }
-      if ([PHASE.CABOOM, PHASE.CLEARED].indexOf(_this2.state.phase) !== -1) {
-        _this2._reset(_this2.props.level);
-        return;
-      }
-      var result = _this2._mineSweeperLogic.open(cell.row, cell.col);
-      if (result.status === 'ERROR') {
-        return;
-      } else if (result.status === 'CLEARED') {
-        _this2.state.phase = 'CLEARED';
-        _this2.dispatch('change-phase', PHASE.CLEARED);
-      } else if (result.status === 'CABOOM') {
-        _this2.state.phase = 'CABOOM';
-        _this2.dispatch('change-phase', PHASE.CABOOM);
-      }
-      _this2.dispatch('change-field', {
-        field: result.field,
-        flags: result.flags
-      });
-    });
-
-    _this2.emitter.on('flagCell', function (cell) {
-      var result = _this2._mineSweeperLogic.flag(cell.row, cell.col);
-      _this2.dispatch('change-field', {
-        field: result.field,
-        flags: result.flags
-      });
-    });
-
-    var level = _this2.props.level || 'BEGINNER';
-    var data = _this2._mineSweeperLogic.getNewField(level);
     _this2.state = {
-      field: data.field,
-      flags: data.flags,
+      field: [[]],
+      flags: [[]],
       phase: PHASE.READY
     };
     return _this2;
   }
 
   _createClass(Field, [{
-    key: '_reset',
-    value: function _reset(level) {
-      var data = this._mineSweeperLogic.getNewField(level);
-      this.setState({
+    key: 'componentDidMount',
+    value: function componentDidMount() {
+      var _this3 = this;
+
+      this.emitter.on('change-field', function (_ref2) {
+        var field = _ref2.field;
+        var flags = _ref2.flags;
+
+        _this3.setState({ field: field, flags: flags });
+      });
+      this.emitter.on('change-level', function (level) {
+        _this3._reset(level);
+      });
+      this.emitter.on('openCell', function (cell) {
+        if (_this3.state.phase === PHASE.READY) {
+          _this3.state.phase = PHASE.PLAYING;
+          _this3.dispatch('change-phase', PHASE.PLAYING);
+        }
+        if ([PHASE.CABOOM, PHASE.CLEARED].indexOf(_this3.state.phase) !== -1) {
+          _this3._reset(_this3.props.level);
+          return;
+        }
+        var result = _this3._mineSweeperLogic.open(cell.row, cell.col);
+        if (result.status === 'ERROR') {
+          return;
+        } else if (result.status === 'CLEARED') {
+          _this3.state.phase = 'CLEARED';
+          _this3.dispatch('change-phase', PHASE.CLEARED);
+        } else if (result.status === 'CABOOM') {
+          _this3.state.phase = 'CABOOM';
+          _this3.dispatch('change-phase', PHASE.CABOOM);
+        }
+        _this3.dispatch('change-field', {
+          field: result.field,
+          flags: result.flags
+        });
+      });
+      this.emitter.on('flagCell', function (cell) {
+        var result = _this3._mineSweeperLogic.flag(cell.row, cell.col);
+        _this3.dispatch('change-field', {
+          field: result.field,
+          flags: result.flags
+        });
+      });
+      var level = this.props.level || 'BEGINNER';
+      this._reset(level);
+      /*
+      const data = this._mineSweeperLogic.getNewField(level);
+      this.state = {
         field: data.field,
         flags: data.flags,
         phase: PHASE.READY
+      };
+      */
+    }
+  }, {
+    key: '_reset',
+    value: function _reset(level) {
+      var data = this._mineSweeperLogic.getNewField(level);
+      this.dispatch('change-field', {
+        field: data.field,
+        flags: data.flags,
+        totalMineNum: this._mineSweeperLogic.getTotalMineNum()
       });
+      this.state.phase = PHASE.READY;
       this.dispatch('change-phase', PHASE.READY);
     }
   }, {
     key: 'render',
     value: function render() {
-      var _this3 = this;
+      var _this4 = this;
 
       return _react2.default.createElement(
         'table',
@@ -312,14 +358,14 @@ var Field = function (_React$Component2) {
               row.map(function (mineNum, colNum) {
                 return _react2.default.createElement(Cell, {
                   key: rowNum + '_' + colNum,
-                  dispatch: _this3.props.dispatch,
+                  dispatch: _this4.props.dispatch,
                   cell: {
                     mineNum: mineNum,
-                    flag: _this3.state.flags[rowNum][colNum],
+                    flag: _this4.state.flags[rowNum][colNum],
                     isOpened: mineNum !== null,
                     row: rowNum,
                     col: colNum,
-                    phase: _this3.state.phase
+                    phase: _this4.state.phase
                   } });
               })
             );
@@ -412,6 +458,8 @@ var MineSweeperLogic = function () {
 
     this._mine = null;
     this._flags = null;
+
+    // TODO: This should be managed by the engine itself
     this._totalMineNum = null;
     this.LEVELS = {
       BEGINNER: {
@@ -485,6 +533,11 @@ var MineSweeperLogic = function () {
       return this._mine.colNum;
     }
   }, {
+    key: 'getTotalMineNum',
+    value: function getTotalMineNum() {
+      return this._totalMineNum;
+    }
+  }, {
     key: 'open',
     value: function open(row, col) {
       return this._mixFlag(this._mine.open(row, col));
@@ -503,8 +556,38 @@ var MineSweeperLogic = function () {
   return MineSweeperLogic;
 }();
 
-var TimerCount = function (_React$Component4) {
-  _inherits(TimerCount, _React$Component4);
+var FlagAndMineCount = function (_React$Component4) {
+  _inherits(FlagAndMineCount, _React$Component4);
+
+  function FlagAndMineCount() {
+    _classCallCheck(this, FlagAndMineCount);
+
+    return _possibleConstructorReturn(this, Object.getPrototypeOf(FlagAndMineCount).apply(this, arguments));
+  }
+
+  _createClass(FlagAndMineCount, [{
+    key: 'render',
+    value: function render() {
+      return _react2.default.createElement(
+        'div',
+        { className: 'flagAndMineCount',
+          style: style.flagAndMineCount },
+        '⚐',
+        ' ',
+        this.props.flagNum,
+        '/',
+        '💣',
+        ' ',
+        this.props.totalMineNum
+      );
+    }
+  }]);
+
+  return FlagAndMineCount;
+}(_react2.default.Component);
+
+var TimerCount = function (_React$Component5) {
+  _inherits(TimerCount, _React$Component5);
 
   function TimerCount() {
     var _Object$getPrototypeO3;
@@ -515,34 +598,34 @@ var TimerCount = function (_React$Component4) {
       args[_key3] = arguments[_key3];
     }
 
-    var _this5 = _possibleConstructorReturn(this, (_Object$getPrototypeO3 = Object.getPrototypeOf(TimerCount)).call.apply(_Object$getPrototypeO3, [this].concat(args)));
+    var _this7 = _possibleConstructorReturn(this, (_Object$getPrototypeO3 = Object.getPrototypeOf(TimerCount)).call.apply(_Object$getPrototypeO3, [this].concat(args)));
 
-    _this5.state = {
+    _this7.state = {
       milliseconds: 0
     };
 
-    _this5.timer = new _countupTimer2.default();
-    _this5.timer.on('start', function (data) {
-      _this5.setState(data);
+    _this7.timer = new _countupTimer2.default();
+    _this7.timer.on('start', function (data) {
+      _this7.setState(data);
     });
-    _this5.timer.on('reset', function (data) {
-      _this5.setState(data);
+    _this7.timer.on('reset', function (data) {
+      _this7.setState(data);
     });
-    _this5.timer.on('frame', function (data) {
-      _this5.setState(data);
+    _this7.timer.on('frame', function (data) {
+      _this7.setState(data);
     });
 
-    _this5.emitter = _this5.props.emitter;
-    _this5.emitter.on('change-phase', function (phase) {
+    _this7.emitter = _this7.props.emitter;
+    _this7.emitter.on('change-phase', function (phase) {
       if (phase === PHASE.READY) {
-        _this5.timer.reset();
+        _this7.timer.reset();
       } else if (phase === PHASE.CLEARED || phase === PHASE.CABOOM) {
-        _this5.timer.stop();
+        _this7.timer.stop();
       } else if (phase === PHASE.PLAYING) {
-        _this5.timer.start();
+        _this7.timer.start();
       }
     });
-    return _this5;
+    return _this7;
   }
 
   _createClass(TimerCount, [{
