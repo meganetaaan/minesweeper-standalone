@@ -65,10 +65,6 @@ const style = {
     left: 0,
     right: 0,
     margin: 'auto',
-    /*
-       width: '100%',
-       height: '100%',
-       */
     textAlign: 'center',
     fontSize: '1.2em',
     borderCollapse: 'collapse',

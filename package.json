@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "watch": "watchify -t [ babelify --presets [ es2015 react ]  ] -t browserify-shim ./index.jsx -o 'exorcist ./dest/build.js.map > ./dest/build.js' -d",
+    "watch": "watchify -t [ babelify --presets [ es2015 react ]  ] ./index.jsx -o 'exorcist ./dest/build.js.map > ./dest/build.js' -d",
     "server": "live-server --port=8003 --watch=index.html,dest/build.js",
     "start": "npm run watch & npm run server"
   },
@@ -17,8 +17,6 @@
   },
   "dependencies": {
     "countup-timer": "^0.1.3",
-    "jquery": "^2.2.1",
-    "material-design-lite": "^1.1.1",
     "minesweeper-engine": "^0.3.3",
     "react": "^15.0.2",
     "react-dom": "^15.0.2"
@@ -28,20 +26,10 @@
     "babel-preset-react": "^6.5.0",
     "babelify": "^7.2.0",
     "browserify": "^13.0.0",
-    "browserify-shim": "^3.8.12",
     "eslint-plugin-react": "^5.1.1",
     "exorcist": "^0.4.0",
     "live-server": "^1.0.0",
     "watchify": "^3.7.0"
-  },
-  "browser": {
-    "h5": "./lib/hifive/h5.dev.js"
-  },
-  "browserify-shim": {
-    "jquery": "$",
-    "h5": {
-      "depends": "jquery:jQuery"
-    }
   },
   "bugs": {
     "url": "https://github.com/meganetaaan/minesweeper-standalone/issues"
