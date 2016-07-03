@@ -20,24 +20,24 @@ require('h5');
     return <table className="field" data-mine-status={props.status}>
     <tbody>
     {props.field.map((row, idx) =>
-                     <Row key={idx} cells={row} row={idx} flags={props.flagsField[idx]}/>
-                    )}
-                    </tbody>
-                    </table>
+      <Row key={idx} cells={row} row={idx} flags={props.flagsField[idx]}/>
+    )}
+    </tbody>
+    </table>
   };
 
   const Row = props => {
     return <tr>
     {props.cells.map((mineNum, idx) =>
-                     <Cell key={idx} cell={{
-                       nabors: mineNum,
-                       flag: props.flags[idx],
-                       isOpened: mineNum !== null,
-                       row: props.row,
-                       col: idx}
-                     }/>
-                    )}
-                    </tr>
+      <Cell key={idx} cell={{
+        nabors: mineNum,
+        flag: props.flags[idx],
+        isOpened: mineNum !== null,
+        row: props.row,
+        col: idx}
+      }/>
+    )}
+    </tr>
   };
 
   const Cell = props => {
@@ -49,7 +49,7 @@ require('h5');
     data-mine-num={cell.nabors}
     data-mine-flag={cell.flag}>
     <div>
-      {mineNumber(cell)}
+    {mineNumber(cell)}
     </div>
     </td>
   };
@@ -150,16 +150,19 @@ require('h5');
     __name: 'minesweeper.mineSweeperController',
     _mineSweeperLogic: mineSweeperLogic,
     _status: null,
+    _swipeStore: {isSwiping: false, fromClientY: null, fromRow: null, fromCol: null},
 
     _render: function(data){
       ReactDOM.render(
         <Field status={data.status} field={data.field} flagsField={data.flags}/>,
-          this.$find('.fieldContainer').get(0)
+        this.$find('.fieldContainer').get(0)
       );
     },
 
     __ready: function(){
       this._render(this._mineSweeperLogic.getField());
+
+      this._swipeThreashold = this.$find('.cell')[0].scrollHeight;
       this._status = STATUS.READY;
     },
 
@@ -197,12 +200,39 @@ require('h5');
       }
     },
 
+    '.cell touchmove': function(context) {
+      context.event.preventDefault();
+    },
+
+    '.cell touchstart': function(context, $el) {
+      const isOpened = $el.attr('data-mine-isopened') === 'true';
+      if(isOpened || this._isCaboom){
+        return;
+      } else {
+        this._swipeStore.isSwiping = true;
+        this._swipeStore.fromClientY = context.event.originalEvent.changedTouches[0].clientY;
+        this._swipeStore.fromRow = $el.attr('data-mine-row');
+        this._swipeStore.fromCol = $el.attr('data-mine-col');
+      }
+    },
+
+    '.cell touchend': function(context, $el) {
+      this.log.debug(context);
+      if(this._swipeStore.isSwiping){
+        this.log.debug(`st: ${this._swipeThreashold}, cy: ${context.event.clientY}, ty: ${this._swipeStore.fromClientY}`);
+        if(context.event.originalEvent.changedTouches[0].clientY - this._swipeStore.fromClientY > this._swipeThreashold){
+          this._render(this._mineSweeperLogic.flag(this._swipeStore.fromRow, this._swipeStore.fromCol));
+        }
+        this._swipeStore.isSwiping = false;
+      }
+    },
+
     '.cell contextmenu': function(context, $el) {
       context.event.preventDefault();
       const isOpened = $el.attr('data-mine-isopened') === 'true';
       if(isOpened || this._isCaboom){
         return;
-      } else { 
+      } else {
         const row = Number($el.attr('data-mine-row'));
         const col = Number($el.attr('data-mine-col'));
         this._render(this._mineSweeperLogic.flag(row, col));
@@ -216,9 +246,9 @@ require('h5');
 
   const TimerCount = props => {
     return <div className="timer">
-      {TimeFormatUtil.formatTimeString(props.milliseconds)}
-      {TimeFormatUtil.formatMsecString(props.milliseconds)}
-  </div>
+    {TimeFormatUtil.formatTimeString(props.milliseconds)}
+    {TimeFormatUtil.formatMsecString(props.milliseconds)}
+    </div>
   };
 
   const timerController = {
@@ -226,7 +256,7 @@ require('h5');
     _render: function(data){
       ReactDOM.render(
         <TimerCount milliseconds={data.milliseconds}/>,
-          this.rootElement
+        this.rootElement
       );
     },
 
