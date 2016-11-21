@@ -1,4 +1,5 @@
 require('h5');
+require('babel-polyfill');
 
 (function(){
   'use strict';
